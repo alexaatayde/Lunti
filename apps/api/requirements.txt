@@ -13,7 +13,7 @@ pydantic==2.14.1
 pydantic-settings==2.16.1
 
 # Auth (Supabase JWT verification)
-python-jose[cryptography]==3.5.0
+PyJWT[crypto]==2.15.1
 
 # External services
 supabase==2.33.0
