@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lunti Notifications</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}a{color:#1F7A4D}a:hover{color:#0F3D2A}</style>
+</helmet>
+<div style="width: 390px; height: 844px; display: flex; flex-direction: column; background: #F6FAF6; font-family: 'DM Sans', system-ui, sans-serif; color: #12261C; overflow: hidden">
+
+  <header style="padding: 16px 16px 14px; background: #FFFFFF; border-bottom: 1px solid #DCE7DF; display: flex; align-items: center; justify-content: space-between">
+    <a href="Home.dc.html" style="height: 40px; padding: 0 10px; display: flex; align-items: center; gap: 4px; color: #12261C; font-size: 15px; font-weight: 500; text-decoration: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"></path></svg>Home</a>
+    <h1 style="margin: 0; font-size: 17px; font-weight: 700">Notifications</h1>
+    <button type="button" style="height: 40px; padding: 0 10px; border: 0; background: transparent; color: #1F7A4D; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer">Mark all read</button>
+  </header>
+
+  <main style="flex: 1; min-height: 0; overflow: hidden; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px">
+    <h2 style="margin: 0; font-size: 13px; font-weight: 700; color: #4F6157">NEW · 2</h2>
+
+    <article style="background: #FFFFFF; border: 1px solid #F2C4BD; border-radius: 16px; padding: 14px; display: flex; gap: 12px">
+      <span style="flex: none; width: 38px; height: 38px; border-radius: 12px; background: #FDECEA; color: #9B1C1C; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5.5M12 16.5v.1"></path></svg></span>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; justify-content: space-between; gap: 8px"><h3 style="margin: 0; font-size: 15px; font-weight: 700">Transport budget exceeded</h3><span style="font-size: 12px; color: #4F6157; white-space: nowrap">2h ago</span></div>
+        <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #2A3D32">You've spent ₱520 of your ₱500 weekly Transport budget.</p>
+        <a href="Budget.dc.html" style="font-size: 14px; font-weight: 700; text-decoration: none">View budget</a>
+      </div>
+    </article>
+
+    <article style="background: #FFFFFF; border: 1px solid #F0D9A8; border-radius: 16px; padding: 14px; display: flex; gap: 12px">
+      <span style="flex: none; width: 38px; height: 38px; border-radius: 12px; background: #FFF3DC; color: #7A4A00; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19Z"></path><path d="M12 10v4M12 17v.1"></path></svg></span>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; justify-content: space-between; gap: 8px"><h3 style="margin: 0; font-size: 15px; font-weight: 700">Dining out at 97%</h3><span style="font-size: 12px; color: #4F6157; white-space: nowrap">Yesterday</span></div>
+        <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #2A3D32">₱70 left in your monthly Dining out budget until Oct 31.</p>
+        <a href="Budget.dc.html" style="font-size: 14px; font-weight: 700; text-decoration: none">View budget</a>
+      </div>
+    </article>
+
+    <h2 style="margin: 8px 0 0; font-size: 13px; font-weight: 700; color: #4F6157">EARLIER</h2>
+
+    <article style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 16px; padding: 14px; display: flex; gap: 12px">
+      <span style="flex: none; width: 38px; height: 38px; border-radius: 12px; background: #E3F2E8; color: #1F7A4D; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11h10.8L21 7H6.2"></path><circle cx="9" cy="19" r="1.4"></circle><circle cx="17" cy="19" r="1.4"></circle></svg></span>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; justify-content: space-between; gap: 8px"><h3 style="margin: 0; font-size: 15px; font-weight: 700">Rice may be running low</h3><span style="font-size: 12px; color: #4F6157; white-space: nowrap">Oct 20</span></div>
+        <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #2A3D32">You usually buy rice every ~12 days. Add it to your list?</p>
+        <div style="display: flex; gap: 8px; margin-top: 2px">
+          <button type="button" style="height: 34px; padding: 0 12px; border-radius: 17px; border: 0; background: #1F7A4D; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer">Add to list</button>
+          <button type="button" style="height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #12261C; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer">I still have some</button>
+        </div>
+      </div>
+    </article>
+
+    <article style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 16px; padding: 14px; display: flex; gap: 12px">
+      <span style="flex: none; width: 38px; height: 38px; border-radius: 12px; background: #E3F2E8; color: #1F7A4D; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12.5h17a8.5 7 0 0 1-17 0Z"></path><path d="M12 12.5c0-3.6 2.2-6.1 6.3-6.6 0 3.6-2.2 6.1-6.3 6.6Z" fill="#A7D7B5"></path></svg></span>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; justify-content: space-between; gap: 8px"><h3 style="margin: 0; font-size: 15px; font-weight: 700">Meal idea for tonight</h3><span style="font-size: 12px; color: #4F6157; white-space: nowrap">Oct 19</span></div>
+        <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #2A3D32">You have 9 of 10 ingredients for Tortang talong.</p>
+        <a href="Meals.dc.html" style="font-size: 14px; font-weight: 700; text-decoration: none">View recipe</a>
+      </div>
+    </article>
+
+    <article style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 16px; padding: 14px; display: flex; gap: 12px">
+      <span style="flex: none; width: 38px; height: 38px; border-radius: 12px; background: #E3F2E8; color: #1F7A4D; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="16" rx="2"></rect><path d="M9 9h6M9 13h6M9 17h3"></path></svg></span>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; justify-content: space-between; gap: 8px"><h3 style="margin: 0; font-size: 15px; font-weight: 700">Shopping reminder</h3><span style="font-size: 12px; color: #4F6157; white-space: nowrap">Oct 18</span></div>
+        <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #2A3D32">5 items on your list · est. ₱395.</p>
+        <a href="ShoppingList.dc.html" style="font-size: 14px; font-weight: 700; text-decoration: none">Open list</a>
+      </div>
+    </article>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

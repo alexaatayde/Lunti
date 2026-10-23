@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lunti Budget</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}a{color:#1F7A4D}a:hover{color:#0F3D2A}</style>
+</helmet>
+<div style="width: 390px; height: 844px; display: flex; flex-direction: column; background: #F6FAF6; font-family: 'DM Sans', system-ui, sans-serif; color: #12261C; overflow: hidden">
+  <main style="flex: 1; min-height: 0; overflow: hidden; padding: 20px 20px 0; display: flex; flex-direction: column; gap: 14px">
+
+    <div role="group" aria-label="Section" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; background: #E6EFE9; border-radius: 14px">
+      <span aria-current="page" style="height: 38px; border-radius: 10px; background: #FFFFFF; color: #1F7A4D; font-size: 14px; font-weight: 700; box-shadow: 0 1px 3px rgba(18,38,28,0.12); display: flex; align-items: center; justify-content: center">Budget</span>
+      <a href="Profile.dc.html" style="height: 38px; border-radius: 10px; color: #4F6157; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; text-decoration: none">Profile</a>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <h1 style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.01em">Budgets</h1>
+      <a href="BudgetCreate.dc.html" style="height: 40px; padding: 0 16px 0 12px; border-radius: 20px; background: #1F7A4D; color: #FFFFFF; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px; text-decoration: none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        New budget
+      </a>
+    </div>
+
+    <section style="position: relative; overflow: hidden; background: #1F7A4D; color: #FFFFFF; border-radius: 20px; padding: 14px 16px; display: flex; flex-direction: column; gap: 9px">
+      <svg width="120" height="120" viewBox="0 0 32 32" aria-hidden="true" style="position: absolute; right: -22px; top: -26px; opacity: 0.16"><path d="M4 28C4 14 14 4 28 4c0 14-10 24-24 24Z" fill="#FFFFFF"></path></svg>
+      <div style="display: flex; align-items: center; gap: 8px">
+        <span style="font-size: 15px; font-weight: 700">Overall</span>
+        <span style="padding: 2px 8px; border-radius: 8px; background: rgba(255,255,255,0.18); font-size: 12px; font-weight: 700">Monthly · Oct 1–31</span>
+      </div>
+      <div role="progressbar" aria-label="Overall 58% used" aria-valuenow="58" aria-valuemin="0" aria-valuemax="100" style="height: 10px; border-radius: 5px; background: rgba(255,255,255,0.22); overflow: hidden"><div style="width: 58%; height: 10px; border-radius: 5px; background: #A7D7B5"></div></div>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: #D3EEDD"><span>₱8,760 of ₱15,000</span><span>₱6,240 left</span></div>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #F0D9A8; border-radius: 18px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+          <span style="font-size: 15px; font-weight: 700">Dining out</span>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap"><span style="padding: 2px 8px; border-radius: 8px; background: #F1F4F2; color: #4F6157; font-size: 12px; font-weight: 500">Monthly · Oct 1–31</span><span style="display: flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 8px; background: #FFF3DC; color: #7A4A00; font-size: 12px; font-weight: 700"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19Z"></path><path d="M12 10v4"></path></svg>Near limit</span></div>
+        </div>
+        <button type="button" aria-label="Edit Dining out budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16Z"></path></svg></button>
+        <button type="button" aria-label="Delete Dining out budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"></path></svg></button>
+      </div>
+      <div role="progressbar" aria-label="Dining out 97% used" aria-valuenow="97" aria-valuemin="0" aria-valuemax="100" style="height: 8px; border-radius: 4px; background: #F5E7CC; overflow: hidden"><div style="width: 97%; height: 8px; border-radius: 4px; background: #D97706"></div></div>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: #4F6157"><span>₱1,930 of ₱2,000 · 97%</span><span style="color: #7A4A00; font-weight: 700">₱70 left</span></div>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #F2C4BD; border-radius: 18px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+          <span style="font-size: 15px; font-weight: 700">Transport</span>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap"><span style="padding: 2px 8px; border-radius: 8px; background: #F1F4F2; color: #4F6157; font-size: 12px; font-weight: 500">Weekly · Oct 19–25</span><span style="display: flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 8px; background: #FDECEA; color: #9B1C1C; font-size: 12px; font-weight: 700"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5.5M12 16.5v.1"></path></svg>Exceeded</span></div>
+        </div>
+        <button type="button" aria-label="Edit Transport budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16Z"></path></svg></button>
+        <button type="button" aria-label="Delete Transport budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"></path></svg></button>
+      </div>
+      <div role="progressbar" aria-label="Transport 104% used" aria-valuenow="104" aria-valuemin="0" aria-valuemax="100" style="height: 8px; border-radius: 4px; background: #F7D9D4; overflow: hidden"><div style="width: 100%; height: 8px; border-radius: 4px; background: #C0392B"></div></div>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: #4F6157"><span>₱520 of ₱500 · 104%</span><span style="color: #9B1C1C; font-weight: 700">Over by ₱20</span></div>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 18px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+          <span style="font-size: 15px; font-weight: 700">Daily allowance</span>
+          <div style="display: flex; gap: 6px"><span style="padding: 2px 8px; border-radius: 8px; background: #F1F4F2; color: #4F6157; font-size: 12px; font-weight: 500">Daily · Today</span></div>
+        </div>
+        <button type="button" aria-label="Edit Daily allowance budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16Z"></path></svg></button>
+        <button type="button" aria-label="Delete Daily allowance budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"></path></svg></button>
+      </div>
+      <div role="progressbar" aria-label="Daily allowance 29% used" aria-valuenow="29" aria-valuemin="0" aria-valuemax="100" style="height: 8px; border-radius: 4px; background: #E6EFE9; overflow: hidden"><div style="width: 29%; height: 8px; border-radius: 4px; background: #1F7A4D"></div></div>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: #4F6157"><span>₱146 of ₱500 · 29%</span><span>₱354 left</span></div>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 18px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+          <span style="font-size: 15px; font-weight: 700">Utilities</span>
+          <div style="display: flex; gap: 6px"><span style="padding: 2px 8px; border-radius: 8px; background: #F1F4F2; color: #4F6157; font-size: 12px; font-weight: 500">Custom · Oct 5 – Nov 4</span></div>
+        </div>
+        <button type="button" aria-label="Edit Utilities budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16Z"></path></svg></button>
+        <button type="button" aria-label="Delete Utilities budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"></path></svg></button>
+      </div>
+      <div role="progressbar" aria-label="Utilities 48% used" aria-valuenow="48" aria-valuemin="0" aria-valuemax="100" style="height: 8px; border-radius: 4px; background: #E6EFE9; overflow: hidden"><div style="width: 48%; height: 8px; border-radius: 4px; background: #1F7A4D"></div></div>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: #4F6157"><span>₱960 of ₱2,000 · 48%</span><span>₱1,040 left</span></div>
+    </section>
+  </main>
+
+  <dc-import name="NavBar" active="budget" hint-size="390px,88px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

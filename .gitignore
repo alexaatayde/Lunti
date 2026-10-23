@@ -1,0 +1,22 @@
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Secrets: commit only .env.example files
+.env
+.env.*
+!.env.example
+
+# Python (apps/api)
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / Expo (apps/mobile has its own .gitignore too)
+node_modules/
+.expo/

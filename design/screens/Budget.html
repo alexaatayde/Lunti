@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Lunti Budget</title>
+<!-- Lunti design handoff · Budget — SRS 3.1.3 · 390×844px artboard. Rendered from Budget.dc.html. -->
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}a{color:#1F7A4D}a:hover{color:#0F3D2A}</style>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+<style>html,body{margin:0;background:#e9ece6}.lunti-artboard{width:390px;min-height:844px;margin:0 auto;position:relative}</style>
+</head>
+<body>
+<div class="lunti-artboard">
+<div style="width: 390px; height: 844px; display: flex; flex-direction: column; background: #F6FAF6; font-family: 'DM Sans', system-ui, sans-serif; color: #12261C; overflow: hidden">
+  <main style="flex: 1; min-height: 0; overflow: hidden; padding: 20px 20px 0; display: flex; flex-direction: column; gap: 14px">
+
+    <div role="group" aria-label="Section" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; background: #E6EFE9; border-radius: 14px">
+      <span aria-current="page" style="height: 38px; border-radius: 10px; background: #FFFFFF; color: #1F7A4D; font-size: 14px; font-weight: 700; box-shadow: 0 1px 3px rgba(18,38,28,0.12); display: flex; align-items: center; justify-content: center">Budget</span>
+      <a href="Profile.html" style="height: 38px; border-radius: 10px; color: #4F6157; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; text-decoration: none">Profile</a>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <h1 style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.01em">Budgets</h1>
+      <a href="BudgetCreate.html" style="height: 40px; padding: 0 16px 0 12px; border-radius: 20px; background: #1F7A4D; color: #FFFFFF; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px; text-decoration: none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+        New budget
+      </a>
+    </div>
+
+    <section style="position: relative; overflow: hidden; background: #1F7A4D; color: #FFFFFF; border-radius: 20px; padding: 14px 16px; display: flex; flex-direction: column; gap: 9px">
+      <svg width="120" height="120" viewBox="0 0 32 32" aria-hidden="true" style="position: absolute; right: -22px; top: -26px; opacity: 0.16"><path d="M4 28C4 14 14 4 28 4c0 14-10 24-24 24Z" fill="#FFFFFF"></path></svg>
+      <div style="display: flex; align-items: center; gap: 8px">
+        <span style="font-size: 15px; font-weight: 700">Overall</span>
+        <span style="padding: 2px 8px; border-radius: 8px; background: rgba(255,255,255,0.18); font-size: 12px; font-weight: 700">Monthly · Oct 1–31</span>
+      </div>
+      <div role="progressbar" aria-label="Overall 58% used" aria-valuenow="58" aria-valuemin="0" aria-valuemax="100" style="height: 10px; border-radius: 5px; background: rgba(255,255,255,0.22); overflow: hidden"><div style="width: 58%; height: 10px; border-radius: 5px; background: #A7D7B5"></div></div>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: #D3EEDD"><span>₱8,760 of ₱15,000</span><span>₱6,240 left</span></div>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #F0D9A8; border-radius: 18px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+          <span style="font-size: 15px; font-weight: 700">Dining out</span>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap"><span style="padding: 2px 8px; border-radius: 8px; background: #F1F4F2; color: #4F6157; font-size: 12px; font-weight: 500">Monthly · Oct 1–31</span><span style="display: flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 8px; background: #FFF3DC; color: #7A4A00; font-size: 12px; font-weight: 700"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19Z"></path><path d="M12 10v4"></path></svg>Near limit</span></div>
+        </div>
+        <button type="button" aria-label="Edit Dining out budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16Z"></path></svg></button>
+        <button type="button" aria-label="Delete Dining out budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"></path></svg></button>
+      </div>
+      <div role="progressbar" aria-label="Dining out 97% used" aria-valuenow="97" aria-valuemin="0" aria-valuemax="100" style="height: 8px; border-radius: 4px; background: #F5E7CC; overflow: hidden"><div style="width: 97%; height: 8px; border-radius: 4px; background: #D97706"></div></div>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: #4F6157"><span>₱1,930 of ₱2,000 · 97%</span><span style="color: #7A4A00; font-weight: 700">₱70 left</span></div>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #F2C4BD; border-radius: 18px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+          <span style="font-size: 15px; font-weight: 700">Transport</span>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap"><span style="padding: 2px 8px; border-radius: 8px; background: #F1F4F2; color: #4F6157; font-size: 12px; font-weight: 500">Weekly · Oct 19–25</span><span style="display: flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 8px; background: #FDECEA; color: #9B1C1C; font-size: 12px; font-weight: 700"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5.5M12 16.5v.1"></path></svg>Exceeded</span></div>
+        </div>
+        <button type="button" aria-label="Edit Transport budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16Z"></path></svg></button>
+        <button type="button" aria-label="Delete Transport budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"></path></svg></button>
+      </div>
+      <div role="progressbar" aria-label="Transport 104% used" aria-valuenow="104" aria-valuemin="0" aria-valuemax="100" style="height: 8px; border-radius: 4px; background: #F7D9D4; overflow: hidden"><div style="width: 100%; height: 8px; border-radius: 4px; background: #C0392B"></div></div>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: #4F6157"><span>₱520 of ₱500 · 104%</span><span style="color: #9B1C1C; font-weight: 700">Over by ₱20</span></div>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 18px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+          <span style="font-size: 15px; font-weight: 700">Daily allowance</span>
+          <div style="display: flex; gap: 6px"><span style="padding: 2px 8px; border-radius: 8px; background: #F1F4F2; color: #4F6157; font-size: 12px; font-weight: 500">Daily · Today</span></div>
+        </div>
+        <button type="button" aria-label="Edit Daily allowance budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16Z"></path></svg></button>
+        <button type="button" aria-label="Delete Daily allowance budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"></path></svg></button>
+      </div>
+      <div role="progressbar" aria-label="Daily allowance 29% used" aria-valuenow="29" aria-valuemin="0" aria-valuemax="100" style="height: 8px; border-radius: 4px; background: #E6EFE9; overflow: hidden"><div style="width: 29%; height: 8px; border-radius: 4px; background: #1F7A4D"></div></div>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: #4F6157"><span>₱146 of ₱500 · 29%</span><span>₱354 left</span></div>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 18px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+          <span style="font-size: 15px; font-weight: 700">Utilities</span>
+          <div style="display: flex; gap: 6px"><span style="padding: 2px 8px; border-radius: 8px; background: #F1F4F2; color: #4F6157; font-size: 12px; font-weight: 500">Custom · Oct 5 – Nov 4</span></div>
+        </div>
+        <button type="button" aria-label="Edit Utilities budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16Z"></path></svg></button>
+        <button type="button" aria-label="Delete Utilities budget" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #4F6157; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"></path></svg></button>
+      </div>
+      <div role="progressbar" aria-label="Utilities 48% used" aria-valuenow="48" aria-valuemin="0" aria-valuemax="100" style="height: 8px; border-radius: 4px; background: #E6EFE9; overflow: hidden"><div style="width: 48%; height: 8px; border-radius: 4px; background: #1F7A4D"></div></div>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: #4F6157"><span>₱960 of ₱2,000 · 48%</span><span>₱1,040 left</span></div>
+    </section>
+  </main>
+
+  
+
+<nav aria-label="Main" style="width: 390px; height: 88px; box-sizing: border-box; background: #FFFFFF; border-top: 1px solid #DCE7DF; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 6px 4px 14px; font-family: 'DM Sans', system-ui, sans-serif; color: #12261C">
+  <a href="Analytics.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0 4px; color: #5F6F66; text-decoration: none">
+    <span style="display: flex; align-items: center; justify-content: center; width: 56px; height: 32px; border-radius: 16px; background: transparent"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 20.5h17"></path><rect x="4.5" y="14" width="3.2" height="6.5" rx="1"></rect><rect x="10.4" y="10.5" width="3.2" height="10" rx="1"></rect><path d="M18.5 20.5v-8"></path><path d="M18.5 14c-2.3 0-3.5-1.4-3.5-3.4 2.1 0 3.5 1.2 3.5 3.4Z" fill="none"></path><path d="M18.5 12.3c0-2.4 1.3-3.8 3.3-3.8 0 2.2-1.3 3.8-3.3 3.8Z" fill="none"></path></svg></span>
+    <span style="font-size: 11px; font-weight: 500">Analytics</span>
+  </a>
+  <a href="Budget.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0 4px; color: #1F7A4D; text-decoration: none">
+    <span style="display: flex; align-items: center; justify-content: center; width: 56px; height: 32px; border-radius: 16px; background: #E3F2E8"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="6.5" width="17" height="13.5" rx="2.5"></rect><path d="M6 6.5 15.3 3.7a1.3 1.3 0 0 1 1.7 1.2v1.6"></path><path d="M20.5 10.5h-3.8a2.5 2.5 0 0 0 0 5h3.8"></path></svg></span>
+    <span style="font-size: 11px; font-weight: 700">Budget</span>
+  </a>
+  <a href="Home.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0 4px; color: #5F6F66; text-decoration: none">
+    <span style="display: flex; align-items: center; justify-content: center; width: 56px; height: 32px; border-radius: 16px; background: transparent"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.2 12 3.6l8 6.6v9.3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"></path><path d="M12 20.5v-4.7"></path><path d="M12 17c-2.4 0-3.8-1.4-3.8-3.5 2.3 0 3.8 1.3 3.8 3.5Z" fill="none"></path><path d="M12 15.6c0-2.4 1.4-3.8 3.6-3.8 0 2.3-1.4 3.8-3.6 3.8Z" fill="none"></path></svg></span>
+    <span style="font-size: 11px; font-weight: 500">Home</span>
+  </a>
+  <a href="Meals.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0 4px; color: #5F6F66; text-decoration: none">
+    <span style="display: flex; align-items: center; justify-content: center; width: 56px; height: 32px; border-radius: 16px; background: transparent"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12.5h17a8.5 7 0 0 1-17 0Z"></path><path d="M9.5 21h5"></path><path d="M12 12.5c0-3.6 2.2-6.1 6.3-6.6 0 3.6-2.2 6.1-6.3 6.6Z" fill="none"></path><path d="M11 12.5C10.2 10 8.3 8.8 5.8 8.8c.4 2.2 2.1 3.7 5.2 3.7Z" fill="none"></path><path d="M12 12.5 15.6 8.7"></path></svg></span>
+    <span style="font-size: 11px; font-weight: 500">Meals</span>
+  </a>
+  <a href="Transactions.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0 4px; color: #5F6F66; text-decoration: none">
+    <span style="display: flex; align-items: center; justify-content: center; width: 56px; height: 32px; border-radius: 16px; background: transparent"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h12v17l-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3-2 1.3Z"></path><path d="M9 8h6M9 11.5h4.5M9 15h3"></path></svg></span>
+    <span style="font-size: 11px; font-weight: 500">Transactions</span>
+  </a>
+</nav>
+
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lunti - Add a transaction</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+*,*::before,*::after{box-sizing:border-box}
+h1,h2,h3,h4,p{margin:0}
+button{background:transparent;border:0;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #fbfbf8; color: #111827; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', Inter, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; -webkit-font-smoothing: antialiased">
+
+  <div aria-hidden="true" style="position: absolute; inset: 0">
+    <dc-import name="Transactions" hint-size="390px,844px"></dc-import>
+  </div>
+  <a href="Transactions.dc.html" aria-label="Close" style="position: absolute; inset: 0; background: rgba(17,24,39,0.45)"></a>
+
+  <section role="dialog" aria-modal="true" aria-labelledby="add-title" style="position: absolute; left: 0; right: 0; bottom: 0; background: #ffffff; border-radius: 28px 28px 0 0; padding: 10px 20px 32px; box-shadow: 0 -10px 30px rgba(0,0,0,0.12); display: flex; flex-direction: column; gap: 16px">
+    <span aria-hidden="true" style="align-self: center; width: 40px; height: 5px; border-radius: 9999px; background: #e5e7eb"></span>
+    <div>
+      <p style="font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #5a9c39; margin-bottom: 2px">New transaction</p>
+      <h2 id="add-title" style="font-size: 22px; line-height: 1.3; font-weight: 800; letter-spacing: -0.025em">How do you want to add it?</h2>
+    </div>
+
+    <a href="ScanCamera.dc.html" style="display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 20px; background: #f4f7ee; border: 1px solid #e3ebd9">
+      <span style="width: 48px; height: 48px; border-radius: 16px; background: #539e2f; color: #ffffff; display: flex; align-items: center; justify-content: center; flex-shrink: 0">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="12" cy="13" r="3"></circle></svg>
+      </span>
+      <div style="flex: 1; min-width: 0">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <h3 style="font-size: 16px; line-height: 22px; font-weight: 700">Scan a receipt</h3>
+          <span style="font-size: 10px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #4d972b; background: #ffffff; border: 1px solid #e2ebd8; padding: 1px 6px; border-radius: 6px">Fastest</span>
+        </div>
+        <p style="font-size: 12px; line-height: 16px; color: #6b7280; margin-top: 2px">We read the store, items and total. You check before it's saved.</p>
+      </div>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </a>
+
+    <a href="TxnForm.dc.html" style="display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 20px; background: #ffffff; border: 1px solid #e5e7eb">
+      <span style="width: 48px; height: 48px; border-radius: 16px; background: #f3f4f6; color: #374151; display: flex; align-items: center; justify-content: center; flex-shrink: 0">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16Z"></path><path d="m13.5 6.5 4 4"></path></svg>
+      </span>
+      <div style="flex: 1; min-width: 0">
+        <h3 style="font-size: 16px; line-height: 22px; font-weight: 700">Enter manually</h3>
+        <p style="font-size: 12px; line-height: 16px; color: #6b7280; margin-top: 2px">For cash buys, bills or anything without a receipt.</p>
+      </div>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </a>
+
+    <a href="Transactions.dc.html" style="height: 48px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #4b5563; background: #f3f4f6">Cancel</a>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

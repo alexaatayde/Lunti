@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lunti Analytics</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}a{color:#1F7A4D}a:hover{color:#0F3D2A}</style>
+</helmet>
+<div style="width: 390px; height: 1380px; display: flex; flex-direction: column; background: #F6FAF6; font-family: 'DM Sans', system-ui, sans-serif; color: #12261C; overflow: hidden">
+  <main style="flex: 1; min-height: 0; overflow: hidden; padding: 20px 20px 24px; display: flex; flex-direction: column; gap: 14px">
+
+    <h1 style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.01em">Analytics</h1>
+
+    <div role="group" aria-label="Period" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; background: #E6EFE9; border-radius: 14px">
+      <button type="button" style="height: 38px; border-radius: 10px; border: 0; background: transparent; color: #4F6157; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer">Daily</button>
+      <button type="button" style="height: 38px; border-radius: 10px; border: 0; background: transparent; color: #4F6157; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer">Weekly</button>
+      <button type="button" aria-pressed="true" style="height: 38px; border-radius: 10px; border: 0; background: #FFFFFF; color: #1F7A4D; font-family: inherit; font-size: 14px; font-weight: 700; box-shadow: 0 1px 3px rgba(18,38,28,0.12); cursor: pointer">Monthly</button>
+    </div>
+
+    <section style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 20px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 700">Compared with last month</h2>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #4F6157">Oct 1–21</span><span style="font-size: 24px; font-weight: 700; letter-spacing: -0.02em">₱8,760</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px; padding-left: 12px; border-left: 1px solid #EDF3EF"><span style="font-size: 12px; color: #4F6157">Sep 1–21</span><span style="font-size: 24px; font-weight: 700; letter-spacing: -0.02em; color: #4F6157">₱9,950</span></div>
+      </div>
+      <span style="align-self: flex-start; display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 12px; background: #E3F2E8; color: #17603C; font-size: 13px; font-weight: 700">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"></path></svg>
+        12% less · ₱1,190 saved so far
+      </span>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 20px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <h2 style="margin: 0; font-size: 16px; font-weight: 700">Category breakdown</h2>
+        <span style="font-size: 12px; color: #4F6157">Tap a category to see its transactions</span>
+      </div>
+      <div style="display: flex; justify-content: center">
+        <div role="img" aria-label="Category breakdown donut chart" style="width: 120px; height: 120px; border-radius: 60px; background: conic-gradient(#0F5C3A 0% 42%, #2E8B57 42% 64%, #6FB98A 64% 82%, #A7D7B5 82% 93%, #D3EBDB 93% 100%); display: flex; align-items: center; justify-content: center">
+          <div style="width: 74px; height: 74px; border-radius: 37px; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center"><span style="font-size: 14px; font-weight: 700">₱8,760</span><span style="font-size: 11px; color: #4F6157">total</span></div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column">
+        <a href="Transactions.dc.html" style="display: flex; align-items: center; gap: 10px; min-height: 40px; color: #12261C; text-decoration: none; font-size: 14px; border-bottom: 1px solid #EDF3EF"><span style="width: 12px; height: 12px; border-radius: 3px; background: #0F5C3A"></span><span style="flex: 1">Food &amp; Grocery</span><span style="color: #4F6157">42%</span><b>₱3,680</b><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4F6157" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg></a>
+        <a href="Transactions.dc.html" style="display: flex; align-items: center; gap: 10px; min-height: 40px; color: #12261C; text-decoration: none; font-size: 14px; border-bottom: 1px solid #EDF3EF"><span style="width: 12px; height: 12px; border-radius: 3px; background: #2E8B57"></span><span style="flex: 1">Dining out</span><span style="color: #4F6157">22%</span><b>₱1,930</b><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4F6157" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg></a>
+        <a href="Transactions.dc.html" style="display: flex; align-items: center; gap: 10px; min-height: 40px; color: #12261C; text-decoration: none; font-size: 14px; border-bottom: 1px solid #EDF3EF"><span style="width: 12px; height: 12px; border-radius: 3px; background: #6FB98A"></span><span style="flex: 1">Transport</span><span style="color: #4F6157">18%</span><b>₱1,580</b><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4F6157" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg></a>
+        <a href="Transactions.dc.html" style="display: flex; align-items: center; gap: 10px; min-height: 40px; color: #12261C; text-decoration: none; font-size: 14px; border-bottom: 1px solid #EDF3EF"><span style="width: 12px; height: 12px; border-radius: 3px; background: #A7D7B5"></span><span style="flex: 1">Utilities</span><span style="color: #4F6157">11%</span><b>₱960</b><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4F6157" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg></a>
+        <a href="Transactions.dc.html" style="display: flex; align-items: center; gap: 10px; min-height: 40px; color: #12261C; text-decoration: none; font-size: 14px"><span style="width: 12px; height: 12px; box-sizing: border-box; border-radius: 3px; background: #D3EBDB; border: 1px solid #A7D7B5"></span><span style="flex: 1">Others</span><span style="color: #4F6157">7%</span><b>₱610</b><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4F6157" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg></a>
+      </div>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 20px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: baseline; justify-content: space-between">
+        <h2 style="margin: 0; font-size: 16px; font-weight: 700">Spending trend</h2>
+        <span style="font-size: 13px; color: #4F6157">By week, October</span>
+      </div>
+      <div style="height: 120px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: end">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span style="font-size: 12px; font-weight: 700">₱2,450</span><div style="width: 100%; height: 66px; border-radius: 8px 8px 4px 4px; background: #6FB98A"></div></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span style="font-size: 12px; font-weight: 700">₱3,330</span><div style="width: 100%; height: 90px; border-radius: 8px 8px 4px 4px; background: #1F7A4D"></div></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span style="font-size: 12px; font-weight: 700">₱2,980</span><div style="width: 100%; height: 80px; border-radius: 8px 8px 4px 4px; background: #6FB98A"></div></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><span style="font-size: 12px; color: #4F6157">—</span><div style="width: 100%; height: 6px; border-radius: 3px; background: #E6EFE9"></div></div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; font-size: 12px; color: #4F6157; text-align: center"><span>Wk 1</span><span>Wk 2</span><span>Wk 3</span><span>Wk 4</span></div>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 20px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px">
+      <h2 style="margin: 0 0 4px; font-size: 16px; font-weight: 700">Recurring expenses</h2>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #EDF3EF"><div style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 14px; font-weight: 700">Electric bill</span><span style="font-size: 12px; color: #4F6157">Monthly · next around Nov 5</span></div><b style="font-size: 14px">~₱960</b></div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #EDF3EF"><div style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 14px; font-weight: 700">Mobile data load</span><span style="font-size: 12px; color: #4F6157">Monthly · next around Nov 2</span></div><b style="font-size: 14px">₱299</b></div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 0"><div style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 14px; font-weight: 700">Jeepney fares</span><span style="font-size: 12px; color: #4F6157">Weekdays</span></div><b style="font-size: 14px">~₱52/day</b></div>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 20px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px">
+      <h2 style="margin: 0 0 4px; font-size: 16px; font-weight: 700">Product purchase patterns</h2>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #EDF3EF"><div style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 14px; font-weight: 700">Rice, 5 kg</span><span style="font-size: 12px; color: #4F6157">Every ~12 days · last Oct 11 · avg ₱285</span></div><span style="padding: 3px 8px; border-radius: 8px; background: #E3F2E8; color: #17603C; font-size: 12px; font-weight: 700">High confidence</span></div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #EDF3EF"><div style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 14px; font-weight: 700">Eggs, 1 tray</span><span style="font-size: 12px; color: #4F6157">Every ~7 days · last Oct 18 · avg ₱230</span></div><span style="padding: 3px 8px; border-radius: 8px; background: #E3F2E8; color: #17603C; font-size: 12px; font-weight: 700">High confidence</span></div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #EDF3EF"><div style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 14px; font-weight: 700">Bread</span><span style="font-size: 12px; color: #4F6157">Every ~4 days · last Oct 20 · avg ₱85</span></div><span style="padding: 3px 8px; border-radius: 8px; background: #F1F4F2; color: #4F6157; font-size: 12px; font-weight: 700">Limited data</span></div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 0"><div style="flex: 1; display: flex; flex-direction: column; gap: 1px"><span style="font-size: 14px; font-weight: 700">Dish soap</span><span style="font-size: 12px; color: #4F6157">Bought 2 times · no pattern yet</span></div><span style="padding: 3px 8px; border-radius: 8px; border: 1px dashed #B7C6BC; color: #4F6157; font-size: 12px; font-weight: 700">Not enough data</span></div>
+    </section>
+  </main>
+
+  <dc-import name="NavBar" active="analytics" hint-size="390px,88px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1380}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

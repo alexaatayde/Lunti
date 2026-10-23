@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Lunti Create budget</title>
+<!-- Lunti design handoff · Create budget — SRS 3.1.3 · 390×844px artboard. Rendered from BudgetCreate.dc.html. -->
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}a{color:#1F7A4D}a:hover{color:#0F3D2A}</style>
+<style>html,body{margin:0;background:#e9ece6}.lunti-artboard{width:390px;min-height:844px;margin:0 auto;position:relative}</style>
+</head>
+<body>
+<div class="lunti-artboard">
+<div style="width: 390px; height: 844px; display: flex; flex-direction: column; background: #F6FAF6; font-family: 'DM Sans', system-ui, sans-serif; color: #12261C; overflow: hidden">
+
+  <header style="padding: 16px 16px 14px; background: #FFFFFF; border-bottom: 1px solid #DCE7DF; display: flex; align-items: center; justify-content: space-between">
+    <a href="Budget.html" style="height: 40px; padding: 0 10px; display: flex; align-items: center; gap: 4px; color: #12261C; font-size: 15px; font-weight: 500; text-decoration: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"></path></svg>Budgets</a>
+    <h1 style="margin: 0; font-size: 17px; font-weight: 700">New budget</h1>
+    <span style="width: 86px"></span>
+  </header>
+
+  <form style="flex: 1; min-height: 0; margin: 0; padding: 20px; display: flex; flex-direction: column; gap: 18px">
+
+    <label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 700">Category
+      <select style="height: 48px; box-sizing: border-box; padding: 0 12px; border-radius: 12px; border: 1px solid #C9D8CE; font-family: inherit; font-size: 15px; color: #12261C; background: #FFFFFF">
+        <option>All spending (overall)</option>
+        <option selected="">Food &amp; Grocery</option>
+        <option>Dining out</option>
+        <option>Transport</option>
+        <option>Utilities</option>
+        <option>Others</option>
+      </select>
+    </label>
+
+    <fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 8px">
+      <legend style="padding: 0; margin-bottom: 8px; font-size: 14px; font-weight: 700">Period</legend>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; background: #E6EFE9; border-radius: 14px">
+        <button type="button" style="height: 40px; border-radius: 10px; border: 0; background: transparent; color: #4F6157; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer">Daily</button>
+        <button type="button" style="height: 40px; border-radius: 10px; border: 0; background: transparent; color: #4F6157; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer">Weekly</button>
+        <button type="button" style="height: 40px; border-radius: 10px; border: 0; background: transparent; color: #4F6157; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer">Monthly</button>
+        <button type="button" aria-pressed="true" style="height: 40px; border-radius: 10px; border: 0; background: #FFFFFF; color: #1F7A4D; font-family: inherit; font-size: 14px; font-weight: 700; box-shadow: 0 1px 3px rgba(18,38,28,0.12); cursor: pointer">Custom</button>
+      </div>
+    </fieldset>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+      <label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 700">Start date
+        <input type="text" value="Nov 1, 2026" style="height: 48px; box-sizing: border-box; padding: 0 12px; border-radius: 12px; border: 1px solid #C9D8CE; font-family: inherit; font-size: 15px; color: #12261C; background: #FFFFFF">
+      </label>
+      <label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 700">End date
+        <input type="text" value="Nov 15, 2026" style="height: 48px; box-sizing: border-box; padding: 0 12px; border-radius: 12px; border: 1px solid #C9D8CE; font-family: inherit; font-size: 15px; color: #12261C; background: #FFFFFF">
+      </label>
+    </div>
+
+    <label style="display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 700">Spending limit
+      <span style="display: flex; align-items: center; height: 56px; box-sizing: border-box; padding: 0 14px; border-radius: 12px; border: 1.5px solid #1F7A4D; background: #FFFFFF; gap: 6px">
+        <span style="font-size: 22px; font-weight: 700; color: #4F6157">₱</span>
+        <input type="text" inputmode="decimal" value="2,500.00" style="flex: 1; min-width: 0; border: 0; outline: none; font-family: inherit; font-size: 22px; font-weight: 700; color: #12261C; background: transparent">
+      </span>
+      <span style="font-size: 12px; font-weight: 500; color: #4F6157">About ₱167 per day for 15 days</span>
+    </label>
+
+    <div style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+      <label style="display: flex; align-items: center; gap: 12px; min-height: 32px">
+        <span style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 15px; font-weight: 700">Budget alerts</span><span style="font-size: 13px; color: #4F6157">Notify me at 90%, and when the limit is reached or exceeded</span></span>
+        <input type="checkbox" checked="" style="width: 22px; height: 22px; accent-color: #1F7A4D; margin: 0">
+      </label>
+    </div>
+
+    <p style="margin: 0; font-size: 13px; line-height: 1.45; color: #4F6157">Remaining balance is calculated from your saved transactions only.</p>
+  </form>
+
+  <footer style="padding: 12px 20px 28px; background: #FFFFFF; border-top: 1px solid #DCE7DF">
+    <a href="Budget.html" style="height: 52px; border-radius: 14px; background: #1F7A4D; color: #FFFFFF; font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; text-decoration: none">Save budget</a>
+  </footer>
+</div>
+</div>
+</body>
+</html>

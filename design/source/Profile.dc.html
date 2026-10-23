@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lunti Profile</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}a{color:#1F7A4D}a:hover{color:#0F3D2A}</style>
+</helmet>
+<div style="width: 390px; height: 844px; display: flex; flex-direction: column; background: #F6FAF6; font-family: 'DM Sans', system-ui, sans-serif; color: #12261C; overflow: hidden">
+  <main style="flex: 1; min-height: 0; overflow: hidden; padding: 20px 20px 0; display: flex; flex-direction: column; gap: 14px">
+
+    <div role="group" aria-label="Section" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; background: #E6EFE9; border-radius: 14px">
+      <a href="Budget.dc.html" style="height: 38px; border-radius: 10px; color: #4F6157; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; text-decoration: none">Budget</a>
+      <span aria-current="page" style="height: 38px; border-radius: 10px; background: #FFFFFF; color: #1F7A4D; font-size: 14px; font-weight: 700; box-shadow: 0 1px 3px rgba(18,38,28,0.12); display: flex; align-items: center; justify-content: center">Profile</span>
+    </div>
+
+    <section style="display: flex; align-items: center; gap: 14px; padding: 4px 0">
+      <span aria-hidden="true" style="width: 56px; height: 56px; border-radius: 28px; background: #1F7A4D; color: #FFFFFF; font-size: 22px; font-weight: 700; display: flex; align-items: center; justify-content: center">A</span>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+        <h1 style="margin: 0; font-size: 20px; font-weight: 700">Alex</h1>
+        <span style="font-size: 14px; color: #4F6157">alex@example.com</span>
+      </div>
+      <button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid #DCE7DF; background: #FFFFFF; color: #12261C; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer">Edit</button>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 6px">
+      <h2 style="margin: 0; font-size: 13px; font-weight: 700; color: #4F6157">NOTIFICATIONS</h2>
+      <div style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 16px">
+        <label style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px; border-bottom: 1px solid #EDF3EF"><span style="flex: 1; font-size: 15px">Budget alerts</span><input type="checkbox" checked="" style="width: 22px; height: 22px; accent-color: #1F7A4D; margin: 0"></label>
+        <label style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px; border-bottom: 1px solid #EDF3EF"><span style="flex: 1; font-size: 15px">Replenishment reminders</span><input type="checkbox" checked="" style="width: 22px; height: 22px; accent-color: #1F7A4D; margin: 0"></label>
+        <label style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px; border-bottom: 1px solid #EDF3EF"><span style="flex: 1; font-size: 15px">Shopping reminders</span><input type="checkbox" checked="" style="width: 22px; height: 22px; accent-color: #1F7A4D; margin: 0"></label>
+        <label style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px"><span style="flex: 1; font-size: 15px">Meal recommendations</span><input type="checkbox" style="width: 22px; height: 22px; accent-color: #1F7A4D; margin: 0"></label>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 6px">
+      <h2 style="margin: 0; font-size: 13px; font-weight: 700; color: #4F6157">ACCOUNT &amp; DATA</h2>
+      <div style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 16px">
+        <a href="#" style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px; border-bottom: 1px solid #EDF3EF; color: #12261C; text-decoration: none; font-size: 15px"><span style="flex: 1">Expense categories</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4F6157" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg></a>
+        <a href="#" style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px; border-bottom: 1px solid #EDF3EF; color: #12261C; text-decoration: none; font-size: 15px"><span style="flex: 1">Change password</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4F6157" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg></a>
+        <a href="#" style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px; color: #12261C; text-decoration: none; font-size: 15px"><span style="flex: 1">Privacy &amp; data</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4F6157" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg></a>
+      </div>
+    </section>
+
+    <div style="background: #FFFFFF; border: 1px solid #DCE7DF; border-radius: 16px">
+      <button type="button" style="width: 100%; min-height: 52px; padding: 0 14px; border: 0; border-bottom: 1px solid #EDF3EF; background: transparent; text-align: left; font-family: inherit; font-size: 15px; color: #12261C; cursor: pointer">Log out</button>
+      <button type="button" style="width: 100%; min-height: 52px; padding: 0 14px; border: 0; background: transparent; text-align: left; font-family: inherit; font-size: 15px; font-weight: 700; color: #9B1C1C; cursor: pointer">Delete account</button>
+    </div>
+  </main>
+
+  <dc-import name="NavBar" active="budget" hint-size="390px,88px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
