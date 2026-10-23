@@ -1,7 +1,26 @@
+# Web framework
 fastapi==0.162.0
 uvicorn[standard]==0.54.0
+python-multipart==0.0.32
+
+# Database
 SQLAlchemy==2.1.6
 alembic==1.20.1
+psycopg[binary]==3.3.6
+
+# Settings and validation
 pydantic==2.14.1
 pydantic-settings==2.16.1
-psycopg[binary]==3.3.6
+
+# Auth (Supabase JWT verification)
+python-jose[cryptography]==3.5.0
+
+# External services
+supabase==2.33.0
+google-cloud-vision==3.16.0
+openai==3.37.0
+firebase-admin==7.7.0
+httpx==0.28.1
+
+# Scheduled jobs (AGENTS.md §7.6)
+APScheduler==3.11.3
