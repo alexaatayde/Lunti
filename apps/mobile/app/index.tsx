@@ -1,11 +1,6 @@
-// Temporary placeholder so the router has a starting route.
-// Real screens (AGENTS.md §8) replace this in a later step.
-import { Text, View } from 'react-native';
+import { Redirect } from 'expo-router';
 
+// No auth gate yet (build step 1): always start on the Home tab.
 export default function Index() {
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>Lunti scaffold</Text>
-    </View>
-  );
+  return <Redirect href="/home" />;
 }
