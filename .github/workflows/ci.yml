@@ -32,18 +32,34 @@ jobs:
           cache-dependency-path: apps/mobile/package-lock.json
 
       - run: npm ci
+      # The committed client must match the committed API spec (apps/api checks the spec).
+      - name: Generated API client is up to date
+        run: npm run api:generate && git diff --exit-code src/api/schema.d.ts
       - run: npx eslint . --max-warnings 0
       - run: npm run typecheck
       # Tests use a fake Supabase client: no secrets or network needed.
       - run: npm test -- --ci
 
   api:
-    name: API (lint, test)
+    name: API (lint, test, migrations)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
       run:
         working-directory: apps/api
+    services:
+      # Throwaway PostgreSQL 17 (Supabase's version). Tests create their own database on it,
+      # load tests/supabase_stub.sql, run the migrations and check RLS. Never Supabase itself.
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v5
 
@@ -55,4 +71,5 @@ jobs:
 
       - run: pip install -r requirements-dev.txt
       - run: ruff check .
-      - run: pytest
+      # -rs lists skipped tests; with the service above, none should be skipped.
+      - run: pytest -rs

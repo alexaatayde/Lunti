@@ -44,6 +44,8 @@ export const fakeAuth = {
   signInWithPassword: jest.fn(),
   signUp: jest.fn(),
   signOut: jest.fn(),
+  getSession: jest.fn(async () => ({ data: { session: current }, error: null })),
+  refreshSession: jest.fn(async () => ({ data: { session: current }, error: null })),
 };
 
 export const fakeAuthStorage = { setPersist: jest.fn() };
@@ -67,4 +69,6 @@ export function resetFakeSupabase(session: Session | null = null) {
     return { error: null };
   });
   fakeAuthStorage.setPersist.mockClear();
+  fakeAuth.getSession.mockClear();
+  fakeAuth.refreshSession.mockClear();
 }

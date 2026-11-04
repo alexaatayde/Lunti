@@ -57,13 +57,59 @@ cd apps/api
 python3.13 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
-cp .env.example .env        # then fill in values
-uvicorn app.main:app --reload
+cp .env.example .env        # then fill in DATABASE_URL and SUPABASE_URL
+alembic upgrade head        # create/upgrade the database schema
+uvicorn app.main:app --reload --host 0.0.0.0
 ```
 
-- Health check: http://localhost:8000/health
+- Health: http://localhost:8000/health · database: http://localhost:8000/health/db
 - API docs (Swagger): http://localhost:8000/docs
-- Tests and lint: `pytest` and `ruff check .`
+- Every `/api/v1/*` route needs `Authorization: Bearer <Supabase access token>`.
+- Lint: `ruff check .` · Tests: `pytest` (database tests are skipped unless `TEST_DATABASE_URL` is set)
+
+### Database
+
+- Migrations live in `alembic/versions`. Check the SQL before touching Supabase:
+  `alembic upgrade head --sql` prints it without connecting.
+- Each API request runs as the restricted `lunti_app_user` role with the caller's id set, so
+  Row Level Security limits every query to that user's rows. Supabase's Data API roles
+  (`anon`, `authenticated`) have no access to Lunti tables; the app goes through FastAPI.
+- A trigger on `auth.users` creates each user's profile (with both consent times) and
+  default preferences at sign-up. The migration also backfills users who already exist.
+
+### Tests with a database
+
+`TEST_DATABASE_URL` must point at a PostgreSQL 17 server where the user may create databases
+and roles (a local server or Docker — **never Supabase**). The tests create a throwaway
+database, load `tests/supabase_stub.sql`, migrate as a non-superuser and drop it afterwards.
+
+```bash
+docker run --rm -d -p 54329:5432 -e POSTGRES_PASSWORD=postgres --name lunti-pg postgres:17
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:54329/postgres pytest -rs
+```
+
+### Seed data (synthetic)
+
+`scripts/seed.py` adds ~8 weeks of synthetic purchases, products and budgets for one user.
+It only accepts an explicit `--database-url` (it never reads `DATABASE_URL`), refuses
+non-local hosts unless `--allow-remote`, and only inserts rows with fixed ids, so it can be
+re-run safely and never changes existing data.
+
+```bash
+# Local development database (migrated with alembic first):
+python -m scripts.seed --database-url postgresql://postgres:postgres@localhost:54329/lunti_dev --create-demo-user
+# A separate Supabase *development* project, for a user who signed up there:
+python -m scripts.seed --database-url "<dev project URL>" --user-id <uuid> --allow-remote
+```
+
+### Mobile API client
+
+After changing an endpoint: `python -m scripts.export_openapi` (apps/api), then
+`npm run api:generate` (apps/mobile). CI fails if either file is stale.
+
+On a phone, `localhost` is the phone itself: set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env`
+to your computer's LAN address, e.g. `http://192.168.1.20:8000/api/v1`, and start uvicorn
+with `--host 0.0.0.0`.
 
 ## CI
 

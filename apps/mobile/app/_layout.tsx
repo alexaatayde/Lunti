@@ -7,10 +7,12 @@ import {
   Inter_900Black,
   useFonts,
 } from '@expo-google-fonts/inter';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { SplashScreen, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import { queryClient, useResetQueriesOnUserChange } from '../src/api/queryClient';
 import { useAuthListener } from '../src/features/auth/useAuthListener';
 import { SetupRequired } from '../src/features/auth/SetupRequired';
 import { isSupabaseConfigured } from '../src/lib/supabase';
@@ -35,6 +37,7 @@ export default function RootLayout() {
     Inter_900Black,
   });
   useAuthListener();
+  useResetQueriesOnUserChange();
   const status = useSessionStore((s) => s.status);
 
   // If fonts fail to load, carry on with the system font rather than a blank app.
@@ -50,7 +53,7 @@ export default function RootLayout() {
   const signedIn = status === 'signedIn';
 
   return (
-    <>
+    <QueryClientProvider client={queryClient}>
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         {/* Every app screen must be listed here: Expo Router leaves unlisted routes public. */}
@@ -71,6 +74,6 @@ export default function RootLayout() {
         {/* index only redirects, based on the session. */}
         <Stack.Screen name="index" />
       </Stack>
-    </>
+    </QueryClientProvider>
   );
 }

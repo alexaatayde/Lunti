@@ -1,5 +1,6 @@
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 
+import { queryClient } from '../../src/api/queryClient';
 import { useSessionStore } from '../../src/stores/session';
 import {
   fakeAuth,
@@ -15,9 +16,31 @@ jest.mock(
 
 const appDir = './app';
 
+let fetchMock: jest.SpyInstance;
+
 beforeEach(() => {
   useSessionStore.setState({ status: 'loading', session: null });
+  queryClient.clear();
+  // Profile loads GET /me; answer with a fixed profile.
+  fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(
+    async () =>
+      new Response(
+        JSON.stringify({
+          user_id: '00000000-0000-4000-8000-000000000001',
+          email: 'alex@example.com',
+          full_name: 'Alex Reyes',
+          role: 'user',
+          currency: 'PHP',
+          terms_accepted_at: null,
+          data_consent_at: null,
+          created_at: '2026-11-04T00:00:00Z',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+  );
 });
+
+afterEach(() => fetchMock.mockRestore());
 
 describe('route guard: signed out', () => {
   beforeEach(() => resetFakeSupabase(null));
@@ -69,14 +92,35 @@ describe('route guard: signed in', () => {
     expect(router.getPathname()).toBe('/home');
   });
 
-  it('logs out from Profile and returns to Welcome', async () => {
+  it('shows the profile from the API, logs out, and forgets cached data', async () => {
     const router = await renderRouter(appDir, { initialUrl: '/profile' });
+    expect(await screen.findByText('Alex Reyes')).toBeOnTheScreen();
     expect(screen.getByText('alex@example.com')).toBeOnTheScreen();
+    expect(queryClient.getQueryData(['me'])).toBeDefined();
 
     await fireEvent.press(screen.getByRole('button', { name: 'Log out' }));
 
     expect(fakeAuth.signOut).toHaveBeenCalledWith({ scope: 'local' });
     await waitFor(() => expect(router.getPathname()).toBe('/welcome'));
+    // The next account to sign in on this phone must not see this user's data.
+    expect(queryClient.getQueryData(['me'])).toBeUndefined();
+  });
+
+  it('shows a retry when the API is unreachable', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Network request failed'));
+    const defaults = queryClient.getDefaultOptions();
+    // Skip the automatic retries (and their back-off) for this test.
+    queryClient.setDefaultOptions({ ...defaults, queries: { ...defaults.queries, retry: false } });
+    try {
+      await renderRouter(appDir, { initialUrl: '/profile' });
+
+      expect(
+        await screen.findByText("Can't reach Lunti. Check your connection and try again."),
+      ).toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeOnTheScreen();
+    } finally {
+      queryClient.setDefaultOptions(defaults);
+    }
   });
 
   it('returns to Welcome when the session ends (expired or revoked)', async () => {
