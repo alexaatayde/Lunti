@@ -9,7 +9,6 @@ export default function HomeScreen() {
         { label: "Scan receipt", href: "/scan/camera" },
         { label: "View pantry", href: "/meals/pantry" },
         { label: "Notifications", href: "/notifications" },
-        { label: "Welcome (auth flow)", href: "/welcome" },
         ...(__DEV__ ? [{ label: "Component gallery (dev)", href: "/dev/components" as const }] : []),
       ]}
       inTabs

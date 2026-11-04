@@ -1,0 +1,58 @@
+# Lint, typecheck and test both apps on every pull request and on pushes to main (AGENTS.md §5, §11).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mobile:
+    name: Mobile (lint, typecheck, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # React Native 0.88 needs Node ^22.13 or ^24.3.
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - run: npm ci
+      - run: npx eslint . --max-warnings 0
+      - run: npm run typecheck
+      # Tests use a fake Supabase client: no secrets or network needed.
+      - run: npm test -- --ci
+
+  api:
+    name: API (lint, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: apps/api/requirements*.txt
+
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: pytest

@@ -56,6 +56,14 @@ export const colors = {
   toastAccent: '#86D9A6',
   toastText: '#FFFFFF',
 
+  // Welcome / auth illustrations (not in §1; values from Landing.html)
+  /** Large leaf shape behind the Welcome hero. */
+  leafTint: '#E6EFDC',
+  /** Phone frame around the mini Home screen on Welcome. */
+  deviceFrame: '#1F2A22',
+  /** Border of the floating callout cards on Welcome. */
+  calloutBorder: '#EEF1EA',
+
   // Logo (use the PNGs in assets/brand; listed for completeness)
   logoText: '#37443B',
   logoLeaf: '#70A44F',
@@ -178,6 +186,9 @@ export const shadows = {
   dialog: '0px 20px 40px -10px rgba(0,0,0,0.25)',
   toast: '0px 10px 15px -3px rgba(0,0,0,0.2)',
   focusRing: '0px 0px 0px 4px rgba(83,158,47,0.12)',
+  /** Landing.html floating callouts and phone frame. */
+  callout: '0px 14px 28px -12px rgba(0,0,0,0.2)',
+  device: '0px 30px 50px -20px rgba(31,72,18,0.45)',
 } as const;
 
 export const sizes = {

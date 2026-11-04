@@ -1,6 +1,9 @@
 import { Redirect } from 'expo-router';
 
-// No auth gate yet (build step 1): always start on the Home tab.
+import { useSessionStore } from '../src/stores/session';
+
+/** Entry point: Home when signed in, Welcome otherwise. */
 export default function Index() {
-  return <Redirect href="/home" />;
+  const signedIn = useSessionStore((s) => s.status === 'signedIn');
+  return <Redirect href={signedIn ? '/home' : '/welcome'} />;
 }

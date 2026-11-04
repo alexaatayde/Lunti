@@ -1,5 +1,11 @@
-import { useState, type ReactNode } from 'react';
-import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
+import { useState, type ReactNode, type Ref } from 'react';
+import {
+  StyleSheet,
+  TextInput,
+  View,
+  type TextInputInstance,
+  type TextInputProps,
+} from 'react-native';
 
 import { colors, font, radius, shadows, sizes, spacing } from '../theme';
 import { AppText } from './AppText';
@@ -17,6 +23,8 @@ export type TextFieldProps = Omit<TextInputProps, 'style'> & {
   hideLabel?: boolean;
   /** Field height. Forms use 52 (default); the search field uses 44. */
   height?: number;
+  /** Lets forms move focus to the next field. */
+  ref?: Ref<TextInputInstance>;
 };
 
 /**
@@ -29,6 +37,7 @@ export function TextField({
   error,
   hideLabel,
   height = sizes.input,
+  ref,
   onFocus,
   onBlur,
   ...inputProps
@@ -49,6 +58,7 @@ export function TextField({
         {leftIcon}
         <TextInput
           {...inputProps}
+          ref={ref}
           accessibilityLabel={inputProps.accessibilityLabel ?? label}
           accessibilityHint={error ?? inputProps.accessibilityHint}
           placeholderTextColor={colors.textFaint}

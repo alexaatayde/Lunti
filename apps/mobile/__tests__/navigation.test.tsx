@@ -1,9 +1,19 @@
 import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 
+import { useSessionStore } from '../src/stores/session';
+import { fakeSession, resetFakeSupabase } from '../test-utils/fakeSupabase';
+
+jest.mock('../src/lib/supabase', () => require('../test-utils/fakeSupabase').supabaseModuleMock);
+
 // Renders the real app/ directory to check the navigation skeleton (build step 1).
 const appDir = './app';
 
-describe('navigation skeleton', () => {
+describe('navigation skeleton (signed in)', () => {
+  beforeEach(() => {
+    useSessionStore.setState({ status: 'loading', session: null });
+    resetFakeSupabase(fakeSession());
+  });
+
   it('starts on the Home tab with Home selected', async () => {
     const router = await renderRouter(appDir, { initialUrl: '/' });
 
@@ -30,9 +40,6 @@ describe('navigation skeleton', () => {
   });
 
   it.each([
-    ['/welcome', 'Welcome'],
-    ['/sign-in', 'Sign in'],
-    ['/sign-up', 'Sign up'],
     ['/analytics', 'Analytics'],
     ['/budget', 'Budget'],
     ['/meals', 'Meals'],

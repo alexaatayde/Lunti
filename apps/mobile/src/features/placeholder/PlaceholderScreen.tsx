@@ -3,6 +3,7 @@
  * Real screens from design/ replace these one feature at a time.
  */
 import { router, type Href } from 'expo-router';
+import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -27,6 +28,8 @@ export type PlaceholderScreenProps = {
   nav?: TabKey;
   /** Leave room for the tab bar (tab roots). */
   inTabs?: boolean;
+  /** Working pieces added before the full screen is built (e.g. Log out on Profile). */
+  children?: ReactNode;
 };
 
 const tabHref: Record<TabKey, Href> = {
@@ -45,6 +48,7 @@ export function PlaceholderScreen({
   canGoBack,
   nav,
   inTabs,
+  children,
 }: PlaceholderScreenProps) {
   const insets = useSafeAreaInsets();
   return (
@@ -62,6 +66,7 @@ export function PlaceholderScreen({
             Design: design/screenshots/{designFile}.png · design/screens/{designFile}.html
           </AppText>
         ) : null}
+        {children}
         <View style={styles.links}>
           {links.map((link) => (
             <Button

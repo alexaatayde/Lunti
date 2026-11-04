@@ -24,7 +24,8 @@
     "plugins": [
       "expo-router",
       "expo-asset",
-      "expo-image"
+      "expo-image",
+      "expo-secure-store"
     ],
     "scheme": "lunti"
   }

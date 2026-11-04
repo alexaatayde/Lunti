@@ -190,6 +190,37 @@ export function EyeIcon(props: IconProps) {
   );
 }
 
+/** Hide-password toggle (pairs with EyeIcon; not in the design files, standard eye-off shape). */
+export function EyeOffIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={1.8} {...props}>
+      <Path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-2.6 3.6" />
+      <Path d="M6.6 6.6C3.8 8.4 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6" />
+      <Path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+      <Path d="m3 3 18 18" />
+    </IconBase>
+  );
+}
+
+/** SignUp.html (back to "Sign in") */
+export function ChevronLeftIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={2.2} {...props}>
+      <Polyline points="15 18 9 12 15 6" />
+    </IconBase>
+  );
+}
+
+/** Landing.html ("95% pantry match" callout) */
+export function BowlIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={1.9} {...props}>
+      <Path d="M3.5 12.5h17a8.5 7 0 0 1-17 0Z" />
+      <Path d="M12 12.5c0-3.6 2.2-6.1 6.3-6.6 0 3.6-2.2 6.1-6.3 6.6Z" />
+    </IconBase>
+  );
+}
+
 /** Transactions.html (grocery row) */
 export function BagIcon(props: IconProps) {
   return (
