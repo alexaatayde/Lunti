@@ -109,7 +109,10 @@ After changing an endpoint: `python -m scripts.export_openapi` (apps/api), then
 
 On a phone, `localhost` is the phone itself: set `EXPO_PUBLIC_API_URL` in `apps/mobile/.env`
 to your computer's LAN address, e.g. `http://192.168.1.20:8000/api/v1`, and start uvicorn
-with `--host 0.0.0.0`.
+with `--host 0.0.0.0`. The LAN address can change when your router reassigns it; if the
+app shows "Can't reach Lunti", check it again. On the Android emulator, use
+`http://10.0.2.2:8000/api/v1` instead (the emulator's alias for your computer), which never
+changes. Restart Expo with `npx expo start -c` after editing `.env`.
 
 ## CI
 

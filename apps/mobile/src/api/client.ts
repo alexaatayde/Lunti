@@ -85,14 +85,29 @@ async function accessToken(refresh: boolean): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
+/**
+ * Give up on a request that gets no response in this time. Without it, a wrong or unreachable
+ * API address leaves the request (and the screen's loading state) waiting on the OS connect
+ * timeout, which can be minutes.
+ */
+export const REQUEST_TIMEOUT_MS = 10_000;
+
 async function send(request: Request, token: string | null): Promise<Response> {
   const attempt = request.clone();
   if (token) attempt.headers.set('Authorization', `Bearer ${token}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const cancel = () => controller.abort();
+  request.signal?.addEventListener?.('abort', cancel);
   try {
-    return await globalThis.fetch(attempt);
+    return await globalThis.fetch(attempt, { signal: controller.signal });
   } catch {
-    // fetch only rejects when the request never got a response (offline, DNS, refused).
+    // fetch only rejects when the request never got a response (offline, DNS, refused,
+    // timed out).
     throw new ApiError('network', 0);
+  } finally {
+    clearTimeout(timer);
+    request.signal?.removeEventListener?.('abort', cancel);
   }
 }
 

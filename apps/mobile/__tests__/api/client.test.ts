@@ -1,4 +1,4 @@
-import { api, ApiError, apiBaseUrl, unwrap } from '../../src/api/client';
+import { api, ApiError, apiBaseUrl, REQUEST_TIMEOUT_MS, unwrap } from '../../src/api/client';
 import { fakeAuth, fakeSession, resetFakeSupabase } from '../../test-utils/fakeSupabase';
 
 jest.mock(
@@ -164,6 +164,29 @@ describe('API client', () => {
     expect(error).toBeInstanceOf(ApiError);
     expect(error.kind).toBe('network');
     expect(error.transient).toBe(true);
+  });
+
+  it('gives up on a server that never answers instead of loading forever', async () => {
+    jest.useFakeTimers();
+    try {
+      // Like an API address that no machine answers: fetch only settles when aborted.
+      fetchMock.mockImplementation(
+        (_req: Request, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new Error('Aborted')));
+          }),
+      );
+
+      const pending = unwrap(() => api.GET('/api/v1/me')).catch((e) => e);
+      await jest.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+      const error = await pending;
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error.kind).toBe('network');
+      expect(error.message).toBe("Can't reach Lunti. Check your connection and try again.");
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('sends no Authorization header when signed out', async () => {
