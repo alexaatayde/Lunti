@@ -18,6 +18,10 @@ export const queryClient = new QueryClient({
 /**
  * Drops all cached server data when the signed-in user changes (sign out, or a different
  * account signs in), so one user's data is never shown to another. Mount once at the root.
+ *
+ * The first change at startup (no session known yet → the saved user) is skipped: the cache is
+ * empty then, and clearing it would orphan the queries the first screen just started, leaving
+ * that screen loading forever.
  */
 export function useResetQueriesOnUserChange() {
   const userId = useSessionStore((s) => s.session?.user.id ?? null);
@@ -25,7 +29,7 @@ export function useResetQueriesOnUserChange() {
 
   useEffect(() => {
     if (previous.current !== userId) {
-      queryClient.clear();
+      if (previous.current !== null) queryClient.clear();
       previous.current = userId;
     }
   }, [userId]);

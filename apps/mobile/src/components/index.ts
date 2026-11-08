@@ -14,6 +14,7 @@ export * from './IconButton';
 export * from './ListRow';
 export * from './PageTitle';
 export * from './ProgressBar';
+export * from './SegmentedControl';
 export * from './TextField';
 export * from './Toast';
 export * from './icons';

@@ -1,0 +1,50 @@
+import { useCallback } from 'react';
+
+import {
+  useCreateTransaction,
+  useDeleteTransaction,
+  type TransactionDetail,
+} from '../../api/hooks';
+import { showToast } from '../../stores/toast';
+
+export const SAVED_MESSAGE = 'Transaction saved. Budget updated.';
+export const DELETED_MESSAGE = 'Transaction deleted. Budget updated.';
+
+/**
+ * Deletes a transaction, then shows "Transaction deleted. Budget updated." with Undo
+ * (DESIGN_HANDOFF.md §5.5). Undo records the same expense again, so budgets update again.
+ * Scanned receipts have line items that can't be re-created this way, so they get no Undo.
+ */
+export function useDeleteWithUndo() {
+  const remove = useDeleteTransaction();
+  const create = useCreateTransaction();
+
+  const run = useCallback(
+    async (txn: TransactionDetail) => {
+      await remove.mutateAsync(txn.id);
+      // The screen that deleted has usually closed by the time Undo is tapped, so this uses
+      // the mutation's promise (per-call callbacks don't run after the screen unmounts).
+      const undo =
+        txn.source === 'manual'
+          ? () => {
+              create
+                .mutateAsync({
+                  amount: txn.amount,
+                  category_id: txn.category.id,
+                  occurred_at: txn.occurred_at,
+                  merchant: txn.merchant,
+                  note: txn.note,
+                })
+                .then(
+                  () => showToast('Transaction restored. Budget updated.'),
+                  (error: Error) => showToast(`Couldn't restore it. ${error.message}`),
+                );
+            }
+          : undefined;
+      showToast(DELETED_MESSAGE, { onUndo: undo });
+    },
+    [remove, create],
+  );
+
+  return { run, isPending: remove.isPending, error: remove.error, reset: remove.reset };
+}

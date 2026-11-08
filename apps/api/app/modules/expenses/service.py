@@ -1,4 +1,4 @@
-"""Categories (step 2). Transactions and budgets arrive in build step 3.
+"""Categories. Transactions: transaction_service.py; budgets: budget_service.py.
 
 Defaults (user_id NULL) are visible to everyone and read-only; users manage their own.
 Another user's category is reported as "not found" so its existence isn't revealed.

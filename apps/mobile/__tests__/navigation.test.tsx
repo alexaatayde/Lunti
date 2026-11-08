@@ -1,25 +1,33 @@
 import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 
+import { queryClient } from '../src/api/queryClient';
 import { useSessionStore } from '../src/stores/session';
+import { mockApi } from '../test-utils/fakeApi';
 import { fakeSession, resetFakeSupabase } from '../test-utils/fakeSupabase';
 
 jest.mock('../src/lib/supabase', () => require('../test-utils/fakeSupabase').supabaseModuleMock);
 
-// Renders the real app/ directory to check the navigation skeleton (build step 1).
+// Renders the real app/ directory to check navigation. Screens with data get an empty fake API.
 const appDir = './app';
 
-describe('navigation skeleton (signed in)', () => {
+let api: ReturnType<typeof mockApi>;
+
+describe('navigation (signed in)', () => {
   beforeEach(() => {
     useSessionStore.setState({ status: 'loading', session: null });
     resetFakeSupabase(fakeSession());
+    queryClient.clear();
+    api = mockApi();
   });
+
+  afterEach(() => api.restore());
 
   it('starts on the Home tab with Home selected', async () => {
     const router = await renderRouter(appDir, { initialUrl: '/' });
 
     expect(router.getPathname()).toBe('/home');
     expect(screen.getByRole('tab', { name: 'Home' })).toBeSelected();
-    expect(screen.getAllByRole('header').some((h) => h.props.children === 'Home')).toBe(true);
+    expect(await screen.findByText('Today, at a glance')).toBeOnTheScreen();
   });
 
   it('switches tabs from the bottom nav', async () => {
@@ -35,13 +43,14 @@ describe('navigation skeleton (signed in)', () => {
     const router = await renderRouter(appDir, { initialUrl: '/transactions/abc' });
 
     expect(router.getPathname()).toBe('/transactions/abc');
-    expect(screen.getByText('Transaction abc')).toBeOnTheScreen();
+    // The fake API has no such transaction.
+    expect(await screen.findByText('This transaction no longer exists.')).toBeOnTheScreen();
     expect(screen.getByRole('tab', { name: 'Transactions' })).toBeSelected();
   });
 
   it.each([
     ['/analytics', 'Analytics'],
-    ['/budget', 'Budget'],
+    ['/budget', 'Budgets'],
     ['/meals', 'Meals'],
     ['/meals/pantry', 'Pantry'],
     ['/meals/grocery-list', 'Grocery list'],
@@ -52,13 +61,15 @@ describe('navigation skeleton (signed in)', () => {
     ['/scan/review', 'Review receipt'],
     ['/scan/failed', 'Scan failed'],
     ['/expense-form?mode=add', 'New expense'],
-    ['/expense-form?mode=edit&id=42', 'Edit expense'],
-    ['/add-transaction', 'Add transaction'],
+    ['/expense-form?mode=edit&id=42', 'Edit transaction'],
+    ['/add-transaction', 'How do you want to add it?'],
     ['/category-picker', 'Choose category'],
     ['/dev/components', 'Component gallery'],
   ])('%s shows the "%s" screen', async (url, title) => {
     await renderRouter(appDir, { initialUrl: url });
 
-    expect(screen.getAllByRole('header').some((h) => h.props.children === title)).toBe(true);
+    expect(
+      (await screen.findAllByRole('header')).some((h) => h.props.children === title),
+    ).toBe(true);
   });
 });

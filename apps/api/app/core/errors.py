@@ -47,6 +47,7 @@ class ApiError(Exception):
         *,
         title: str | None = None,
         headers: dict[str, str] | None = None,
+        errors: list[FieldError] | None = None,
     ) -> None:
         super().__init__(detail)
         self.status = status
@@ -54,10 +55,22 @@ class ApiError(Exception):
         self.detail = detail
         self.title = title or HTTPStatus(status).phrase
         self.headers = headers
+        self.errors = errors
 
 
 def not_found(what: str) -> ApiError:
     return ApiError(404, "not-found", f"{what} not found.")
+
+
+def invalid_field(field: str, message: str, code: str = "invalid") -> ApiError:
+    """422 for a rule checked in a service (e.g. "that category isn't yours"), shaped like
+    request validation errors so the app can show it next to the field."""
+    return ApiError(
+        422,
+        "validation-error",
+        "The request has invalid fields.",
+        errors=[FieldError(field=field, message=message, code=code)],
+    )
 
 
 def problem_response(
@@ -88,7 +101,9 @@ def _field_name(loc: tuple[Any, ...]) -> str:
 
 
 async def _api_error(_: Request, exc: ApiError) -> JSONResponse:
-    return problem_response(exc.status, exc.slug, exc.detail, title=exc.title, headers=exc.headers)
+    return problem_response(
+        exc.status, exc.slug, exc.detail, title=exc.title, errors=exc.errors, headers=exc.headers
+    )
 
 
 async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:

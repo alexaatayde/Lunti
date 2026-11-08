@@ -15,6 +15,7 @@ import { useEffect } from 'react';
 import { queryClient, useResetQueriesOnUserChange } from '../src/api/queryClient';
 import { useAuthListener } from '../src/features/auth/useAuthListener';
 import { SetupRequired } from '../src/features/auth/SetupRequired';
+import { ToastHost } from '../src/features/money/ToastHost';
 import { isSupabaseConfigured } from '../src/lib/supabase';
 import { useSessionStore } from '../src/stores/session';
 import { colors } from '../src/theme';
@@ -24,7 +25,7 @@ SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
   // Deep links into stack screens keep the tabs underneath, so Back lands on a tab.
-  initialRouteName: '(tabs)',
+  anchor: '(tabs)',
 };
 
 export default function RootLayout() {
@@ -74,6 +75,7 @@ export default function RootLayout() {
         {/* index only redirects, based on the session. */}
         <Stack.Screen name="index" />
       </Stack>
+      {signedIn ? <ToastHost /> : null}
     </QueryClientProvider>
   );
 }

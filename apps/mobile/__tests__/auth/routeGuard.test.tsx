@@ -8,6 +8,7 @@ import {
   resetFakeSupabase,
   setFakeSession,
 } from '../../test-utils/fakeSupabase';
+import { mockApi } from '../../test-utils/fakeApi';
 
 jest.mock(
   '../../src/lib/supabase',
@@ -21,23 +22,8 @@ let fetchMock: jest.SpyInstance;
 beforeEach(() => {
   useSessionStore.setState({ status: 'loading', session: null });
   queryClient.clear();
-  // Profile loads GET /me; answer with a fixed profile.
-  fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(
-    async () =>
-      new Response(
-        JSON.stringify({
-          user_id: '00000000-0000-4000-8000-000000000001',
-          email: 'alex@example.com',
-          full_name: 'Alex Reyes',
-          role: 'user',
-          currency: 'PHP',
-          terms_accepted_at: null,
-          data_consent_at: null,
-          created_at: '2026-11-04T00:00:00Z',
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ),
-  );
+  // Every screen gets the fake API; Profile loads GET /me (Alex Reyes).
+  fetchMock = mockApi().fetchMock;
 });
 
 afterEach(() => fetchMock.mockRestore());

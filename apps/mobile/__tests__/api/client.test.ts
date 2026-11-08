@@ -189,6 +189,25 @@ describe('API client', () => {
     }
   });
 
+  it('gives up when the session lookup hangs, so the query can retry', async () => {
+    jest.useFakeTimers();
+    try {
+      // Supabase still restoring the session after a cold start: getSession never settles.
+      fakeAuth.getSession.mockImplementationOnce(() => new Promise(() => {}));
+
+      const pending = unwrap(() => api.GET('/api/v1/me')).catch((e) => e);
+      await jest.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+      const error = await pending;
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error.kind).toBe('network');
+      expect(error.transient).toBe(true); // TanStack Query retries it
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('sends no Authorization header when signed out', async () => {
     resetFakeSupabase(null);
     fetchMock.mockResolvedValue(problem(401, 'unauthorized', 'Sign in to continue.'));

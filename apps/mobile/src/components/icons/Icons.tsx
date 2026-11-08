@@ -4,6 +4,7 @@
  */
 import { Circle, Line, Path, Polyline, Rect } from 'react-native-svg';
 
+import { colors } from '../../theme';
 import { IconBase, type IconProps } from './Icon';
 
 /** Transactions.html, TxnForm.html (category row) */
@@ -226,6 +227,69 @@ export function BagIcon(props: IconProps) {
   return (
     <IconBase defaultStrokeWidth={1.8} {...props}>
       <Path d="M16 11V7a4 4 0 0 0-8 0v4M4 9h16l1 11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1L4 9z" />
+    </IconBase>
+  );
+}
+
+/** Transactions.html ("Corner Café", Dining out) */
+export function CupIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={1.8} {...props}>
+      <Path d="M17 8h1a3 3 0 0 1 0 6h-1" />
+      <Path d="M3 8h14v6a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V8z" />
+      <Path d="M7 2v3M11 2v3" />
+    </IconBase>
+  );
+}
+
+/** TxnCategory.html (Transport) */
+export function BusIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={1.8} {...props}>
+      <Rect x={5} y={3.5} width={14} height={14} rx={3} />
+      <Path d="M5 11h14M7.5 17.5v2M16.5 17.5v2" />
+    </IconBase>
+  );
+}
+
+/** TxnCategory.html (Utilities) */
+export function BoltIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={1.8} {...props}>
+      <Path d="M13 3 5 13.5h6L10 21l8-10.5h-6Z" />
+    </IconBase>
+  );
+}
+
+/** TxnCategory.html (Household) */
+export function HouseIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={1.8} {...props}>
+      <Path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />
+      <Path d="M9 21v-6h6v6" />
+    </IconBase>
+  );
+}
+
+/** TxnCategory.html (Others): three filled dots. */
+export function MoreIcon({ color = colors.text, ...props }: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={0} color={color} {...props}>
+      <Circle cx={5} cy={12} r={1.8} fill={color} />
+      <Circle cx={12} cy={12} r={1.8} fill={color} />
+      <Circle cx={19} cy={12} r={1.8} fill={color} />
+    </IconBase>
+  );
+}
+
+/** TxnForm.html ("Items" tile) */
+export function ListIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={1.8} {...props}>
+      <Path d="M9 6h11M9 12h11M9 18h11" />
+      <Circle cx={4.5} cy={6} r={0.6} />
+      <Circle cx={4.5} cy={12} r={0.6} />
+      <Circle cx={4.5} cy={18} r={0.6} />
     </IconBase>
   );
 }

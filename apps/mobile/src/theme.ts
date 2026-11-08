@@ -46,9 +46,17 @@ export const colors = {
   warnBg: '#FEF3C7',
   warnText: '#B45309',
   warnStrong: '#92400E',
+  /** Not in §1: border of a near-limit budget card (Budget.html, amber-200). */
+  warnBorder: '#FDE68A',
   dangerText: '#B91C1C',
   dangerBg: '#FEF2F2',
   dangerBorder: '#FECACA',
+
+  // On a primary-colored card (Budget.html "Overall"), rendered with the current tokens.
+  onPrimaryMuted: 'rgba(255,255,255,0.78)',
+  onPrimaryTrack: 'rgba(255,255,255,0.25)',
+  onPrimaryFill: 'rgba(255,255,255,0.72)',
+  onPrimaryChip: 'rgba(255,255,255,0.18)',
 
   // Overlays
   scrim: 'rgba(17,24,39,0.45)',
@@ -70,6 +78,21 @@ export const colors = {
 } as const;
 
 export type ColorToken = keyof typeof colors;
+
+/**
+ * Category icon tiles (TxnCategory.html, Transactions.html). Keyed by the category's `icon`
+ * from the API; unknown or custom categories use `others`.
+ */
+export const categoryTones = {
+  groceries: { bg: '#EDF6E8', fg: '#4D972B' },
+  dining: { bg: '#FFF7E6', fg: '#B45309' },
+  transport: { bg: '#EEF2FF', fg: '#4F46E5' },
+  utilities: { bg: '#FEF9C3', fg: '#A16207' },
+  household: { bg: '#FDF2F8', fg: '#BE185D' },
+  others: { bg: '#F3F4F6', fg: '#4B5563' },
+} as const;
+
+export type CategoryToneKey = keyof typeof categoryTones;
 
 /** Inter on Android (and web), SF Pro (system font) on iOS — DESIGN_HANDOFF.md §1 Typography. */
 export type FontWeight = 400 | 500 | 600 | 700 | 800 | 900;
@@ -186,6 +209,8 @@ export const shadows = {
   dialog: '0px 20px 40px -10px rgba(0,0,0,0.25)',
   toast: '0px 10px 15px -3px rgba(0,0,0,0.2)',
   focusRing: '0px 0px 0px 4px rgba(83,158,47,0.12)',
+  /** Selected segment of a segmented control (Budget.html). */
+  segment: '0px 1px 3px rgba(0,0,0,0.08)',
   /** Landing.html floating callouts and phone frame. */
   callout: '0px 14px 28px -12px rgba(0,0,0,0.2)',
   device: '0px 30px 50px -20px rgba(31,72,18,0.45)',
@@ -207,5 +232,5 @@ export const sizes = {
   progress: { regular: 8, large: 10 },
 } as const;
 
-export const theme = { colors, typography, radius, spacing, shadows, sizes, font };
+export const theme = { colors, categoryTones, typography, radius, spacing, shadows, sizes, font };
 export default theme;

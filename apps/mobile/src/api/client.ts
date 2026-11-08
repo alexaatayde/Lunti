@@ -77,20 +77,43 @@ export function apiBaseUrl(apiUrl: string = env.apiUrl): string {
     .replace(/\/api\/v1$/, '');
 }
 
-async function accessToken(refresh: boolean): Promise<string | null> {
-  if (!supabase) return null;
-  const { data } = refresh
-    ? await supabase.auth.refreshSession()
-    : await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
-}
-
 /**
  * Give up on a request that gets no response in this time. Without it, a wrong or unreachable
  * API address leaves the request (and the screen's loading state) waiting on the OS connect
  * timeout, which can be minutes.
  */
 export const REQUEST_TIMEOUT_MS = 10_000;
+
+/** Rejects with a retryable network error if `promise` takes longer than `ms`. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new ApiError('network', 0)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
+ * The current access token. Bounded by the request timeout too: right after a cold start,
+ * Supabase may still be restoring or refreshing the saved session, and a stuck lookup would
+ * otherwise leave the screen loading forever. The query retry then asks again.
+ */
+async function accessToken(refresh: boolean): Promise<string | null> {
+  if (!supabase) return null;
+  const lookup: Promise<{ data: { session: { access_token: string } | null } }> = refresh
+    ? supabase.auth.refreshSession()
+    : supabase.auth.getSession();
+  const { data } = await withTimeout(lookup, REQUEST_TIMEOUT_MS);
+  return data.session?.access_token ?? null;
+}
 
 async function send(request: Request, token: string | null): Promise<Response> {
   const attempt = request.clone();
