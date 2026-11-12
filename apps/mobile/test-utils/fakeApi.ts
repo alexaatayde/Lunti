@@ -69,11 +69,19 @@ export function mockApi(routes: Record<string, Route> = {}) {
   const table: Record<string, Route> = { ...DEFAULTS, ...routes };
   const sent: { method: string; path: string; query: URLSearchParams; body: unknown }[] = [];
 
-  const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-    const request = input as Request;
+  const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    // openapi-fetch passes a Request; multipart uploads pass (url, init).
+    const request = input instanceof Request ? input : new Request(String(input), init);
     const url = new URL(request.url);
     const text = request.method === 'GET' ? '' : await request.clone().text();
-    const body = text ? JSON.parse(text) : undefined;
+    let body: unknown = undefined;
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = text; // multipart uploads (receipt photos)
+      }
+    }
     sent.push({ method: request.method, path: url.pathname, query: url.searchParams, body });
 
     const route = table[`${request.method} ${url.pathname}`];

@@ -102,6 +102,49 @@ python -m scripts.seed --database-url postgresql://postgres:postgres@localhost:5
 python -m scripts.seed --database-url "<dev project URL>" --user-id <uuid> --allow-remote
 ```
 
+### Receipt scanning (OCR and photo storage)
+
+Receipt photos go to FastAPI, which stores them in a **private** Supabase Storage bucket and
+reads them with **Google Cloud Vision**. The app never sees either credential. Nothing becomes
+a transaction until the user taps "Save receipt" on the review screen.
+
+One-time setup for real scanning:
+
+1. **Google Cloud Vision.** In a Google Cloud project, enable the *Cloud Vision API* (billing
+   must be on). Create a service account (no project role is needed to call Vision), add a
+   JSON key, save it outside the repo, e.g. `~/.config/lunti/vision-key.json`, and set
+   `GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/vision-key.json` in `apps/api/.env`.
+2. **Supabase Storage.** Dashboard → Storage → *New bucket*: name `receipts`, **Public off**,
+   file size limit 10 MB, allowed types `image/jpeg, image/png, image/webp`. Add **no**
+   storage policies: only the backend's service-role key can read or write it.
+3. **Backend-only key.** Dashboard → Project Settings → API keys → copy the *service_role* /
+   secret key into `SUPABASE_SERVICE_ROLE_KEY` in `apps/api/.env`. Never put it in
+   `apps/mobile/.env` or any `EXPO_PUBLIC_*` variable.
+
+Photos are stored as `receipts/{user_id}/{receipt_id}.{jpg|png|webp}`; the app only gets
+10-minute signed URLs for its own receipts.
+
+**Development without credentials.** Start the API with simulated adapters:
+
+```bash
+OCR_PROVIDER=fixture RECEIPT_STORAGE=local uvicorn app.main:app --reload --host 0.0.0.0
+```
+
+- `fixture` OCR only recognises the synthetic images in `tests/fixtures/receipts/*.png`
+  (byte for byte) and returns their `.txt` text; any other photo reads as unreadable. The
+  review screen labels these results "Simulated OCR (development)".
+- `local` storage writes photos to `apps/api/var/receipts/` (git-ignored). Never use it with
+  real user data.
+- With `APP_ENV=production` both are refused, and missing credentials return a 503. The API
+  never falls back from Google Vision or Supabase Storage to a development adapter.
+- To try it on the Android emulator, copy the images into the gallery:
+  `adb push tests/fixtures/receipts/zz-test-supermarket.png /sdcard/Pictures/` and pick it
+  with *Gallery* on the scan screen. Regenerate them with
+  `python -m scripts.make_receipt_fixtures` (needs Pillow).
+
+`DATABASE_URL` tip: if the database password contains `@`, `:`, `/`, `#` or `%`, URL-encode
+it (`@` → `%40`), otherwise the host is read wrongly and `/health/db` returns 503.
+
 ### Mobile API client
 
 After changing an endpoint: `python -m scripts.export_openapi` (apps/api), then

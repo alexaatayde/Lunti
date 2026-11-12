@@ -293,3 +293,84 @@ export function ListIcon(props: IconProps) {
     </IconBase>
   );
 }
+
+// ---------- scan flow (build step 4) ----------
+
+/** ScanCamera.html (Gallery) */
+export function ImageIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={1.8} {...props}>
+      <Rect x={3.5} y={4.5} width={17} height={15} rx={2.5} />
+      <Circle cx={9} cy={10} r={1.6} />
+      <Path d="m20.5 16-5-5-8 8.5" />
+    </IconBase>
+  );
+}
+
+/** ScanCamera.html (Flash) */
+export function FlashIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={1.8} {...props}>
+      <Path d="M13 3 5 13.5h6L10 21l8-10.5h-6Z" />
+    </IconBase>
+  );
+}
+
+/** ScanFailed.html (hero) */
+export function ReceiptQuestionIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={1.6} {...props}>
+      <Path d="M6 3.5h12v17l-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3-2 1.3Z" />
+      <Path d="M10 8.5c0-1.1.9-2 2-2s2 .9 2 2c0 1.4-2 1.6-2 3" />
+      <Path d="M12 14.5v.1" />
+    </IconBase>
+  );
+}
+
+/** ScanFailed.html (tip: light) */
+export function SunIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={2} {...props}>
+      <Path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3 4.9 4.9M19.1 19.1l-1.4-1.4M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4" />
+      <Circle cx={12} cy={12} r={3.5} />
+    </IconBase>
+  );
+}
+
+/** ScanFailed.html (tip: flatten) */
+export function FlatReceiptIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={2} {...props}>
+      <Rect x={5} y={4} width={14} height={16} rx={2} />
+      <Path d="M9 9h6M9 13h6" />
+    </IconBase>
+  );
+}
+
+/** ScanFailed.html (tip: frame) */
+export function FrameIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={2} {...props}>
+      <Path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" />
+    </IconBase>
+  );
+}
+
+/** ScanReview.html (Reset) */
+export function RefreshIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={2} {...props}>
+      <Path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </IconBase>
+  );
+}
+
+/** ScanReview.html (receipt summary tile) */
+export function ReceiptDocIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={1.8} {...props}>
+      <Path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      <Line x1={9} x2={10} y1={8} y2={8} strokeWidth={2} />
+    </IconBase>
+  );
+}

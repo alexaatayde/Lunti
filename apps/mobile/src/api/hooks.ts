@@ -1,7 +1,8 @@
 /** TanStack Query hooks for the step 2 endpoints (AGENTS.md §8: all server data via src/api). */
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { File } from 'expo-file-system';
 
-import { api, unwrap } from './client';
+import { api, postForm, unwrap } from './client';
 import type { components } from './schema';
 
 export type Me = components['schemas']['Me'];
@@ -214,4 +215,64 @@ export function useDeleteBudget() {
       ),
     onSuccess: () => invalidateMoney(client),
   });
+}
+
+// ---------- receipts (build step 4) ----------
+
+export type Receipt = components['schemas']['Receipt'];
+export type ReceiptConfirm = components['schemas']['ReceiptConfirm'];
+export type ReceiptConfirmed = components['schemas']['ReceiptConfirmed'];
+export type ReceiptFlag = components['schemas']['ReviewFlag'];
+
+export type ReceiptPhoto = {
+  uri: string;
+  /** "image/jpeg" | "image/png" | "image/webp"; the server checks the bytes anyway. */
+  mimeType: string;
+  fileName: string;
+};
+
+/**
+ * Upload a receipt photo and read it. `uploadId` is generated once per photo: resending it
+ * (after a timeout or a dropped connection) returns the same receipt instead of a new one.
+ */
+export function uploadReceipt(photo: ReceiptPhoto, uploadId: string) {
+  return postForm<Receipt>('/api/v1/receipts', () => {
+    const form = new FormData();
+    form.append('client_id', uploadId);
+    // Expo's fetch sends Blob-like parts; expo-file-system's File reads the photo's bytes
+    // unchanged (no re-encoding).
+    form.append('image', new File(photo.uri) as unknown as Blob, photo.fileName);
+    return form;
+  }).then((result) => result.data);
+}
+
+export function useUploadReceipt() {
+  return useMutation({
+    mutationFn: ({ photo, uploadId }: { photo: ReceiptPhoto; uploadId: string }) =>
+      uploadReceipt(photo, uploadId),
+  });
+}
+
+/** Saves the checked receipt as a transaction. Safe to retry: the server returns the same one. */
+export function useConfirmReceipt(receiptId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ReceiptConfirm) =>
+      unwrap(() =>
+        api.POST('/api/v1/receipts/{receipt_id}/confirm', {
+          params: { path: { receipt_id: receiptId } },
+          body,
+        }),
+      ),
+    onSuccess: () => invalidateMoney(client),
+  });
+}
+
+/** Deletes an unconfirmed receipt and its photo (cancel, retake, leaving a failed scan). */
+export function discardReceipt(receiptId: string) {
+  return unwrap(() =>
+    api.DELETE('/api/v1/receipts/{receipt_id}', {
+      params: { path: { receipt_id: receiptId } },
+    }),
+  );
 }

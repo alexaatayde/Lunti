@@ -130,6 +130,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload a receipt photo and read it (returns a draft; nothing is saved as a transaction) */
+        post: operations["upload_receipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/receipts/{receipt_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A receipt with its draft, confidence and review flags */
+        get: operations["get_receipt"];
+        put?: never;
+        post?: never;
+        /** Discard an unconfirmed receipt and its photo */
+        delete: operations["discard_receipt"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/receipts/{receipt_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save the checked receipt as a transaction (recalculates budgets; idempotent) */
+        post: operations["confirm_receipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transactions": {
         parameters: {
             query?: never;
@@ -225,6 +277,20 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Body_upload_receipt */
+        Body_upload_receipt: {
+            /**
+             * Client Id
+             * Format: uuid
+             * @description A new UUID per photo; resending it returns the same receipt.
+             */
+            client_id: string;
+            /**
+             * Image
+             * @description JPEG, PNG or WebP photo of the receipt.
+             */
+            image: string;
+        };
         /** Budget */
         Budget: {
             /** Alerts Enabled */
@@ -454,6 +520,54 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /**
+         * Confidence
+         * @description Whole percents (0–100), shown as "Store 99% · Items 94% · Total 98%".
+         */
+        Confidence: {
+            /** Items */
+            items: number;
+            /** Store */
+            store: number;
+            /** Total */
+            total: number;
+        };
+        /** ConfirmItem */
+        ConfirmItem: {
+            /**
+             * Discount
+             * @default 0
+             */
+            discount: number | string;
+            /** Name */
+            name: string;
+            /**
+             * Quantity
+             * @default 1
+             */
+            quantity: number | string;
+            /** Unit */
+            unit?: string | null;
+            /** Unit Price */
+            unit_price: number | string;
+        };
+        /** DraftItem */
+        DraftItem: {
+            /** Discount */
+            discount: string;
+            /** Line Total */
+            line_total: string;
+            /** Name */
+            name: string;
+            /** Needs Review */
+            needs_review: boolean;
+            /** Quantity */
+            quantity: string;
+            /** Unit */
+            unit: string | null;
+            /** Unit Price */
+            unit_price: string;
+        };
         /** FieldError */
         FieldError: {
             /** Code */
@@ -561,6 +675,149 @@ export interface components {
             title: string;
             /** Type */
             type: string;
+        };
+        /** Receipt */
+        Receipt: {
+            confidence: components["schemas"]["Confidence"] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            draft: components["schemas"]["ReceiptDraft"] | null;
+            /** Failure Reason */
+            failure_reason: ("unreadable" | "no_amounts") | null;
+            /** Flags */
+            flags: components["schemas"]["ReviewFlag"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Image Url */
+            image_url: string | null;
+            /** Ocr Engine */
+            ocr_engine: string | null;
+            possible_duplicate: components["schemas"]["Transaction"] | null;
+            /** Simulated */
+            simulated: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "processing" | "draft" | "failed" | "confirmed";
+            suggested_category: components["schemas"]["CategoryRef"] | null;
+            /** Transaction Id */
+            transaction_id: string | null;
+        };
+        /**
+         * ReceiptConfirm
+         * @description The user-checked receipt. Line totals are recomputed on the server.
+         */
+        ReceiptConfirm: {
+            /**
+             * Category Id
+             * Format: uuid
+             */
+            category_id: string;
+            /**
+             * Discount
+             * @default 0
+             */
+            discount: number | string;
+            /** Items */
+            items?: components["schemas"]["ConfirmItem"][];
+            /** Merchant */
+            merchant?: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Total */
+            total: number | string;
+        };
+        /** ReceiptConfirmed */
+        ReceiptConfirmed: {
+            /** Already Confirmed */
+            already_confirmed: boolean;
+            /** Amount */
+            amount: string;
+            /** Budget Alerts */
+            budget_alerts: components["schemas"]["BudgetAlert"][];
+            category: components["schemas"]["CategoryRef"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Item Count */
+            item_count: number;
+            /** Merchant */
+            merchant: string | null;
+            /** Note */
+            note: string | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Receipt Id */
+            receipt_id: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "manual" | "receipt";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ReceiptDraft
+         * @description What OCR found. Nothing here is saved as a transaction until it is confirmed.
+         */
+        ReceiptDraft: {
+            /** Discount */
+            discount: string;
+            /** Items */
+            items: components["schemas"]["DraftItem"][];
+            /** Items Total */
+            items_total: string;
+            /** Merchant */
+            merchant: string | null;
+            /** Occurred At */
+            occurred_at: string | null;
+            /** Subtotal */
+            subtotal: string | null;
+            /** Total */
+            total: string | null;
+            /** Vat */
+            vat: string | null;
+        };
+        /**
+         * ReviewFlag
+         * @description A field the user should check before saving (low confidence, missing, ambiguous).
+         */
+        ReviewFlag: {
+            /** Code */
+            code: string;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "merchant" | "occurred_at" | "total" | "items";
+            /** Message */
+            message: string;
         };
         /** Transaction */
         Transaction: {
@@ -1569,6 +1826,287 @@ export interface operations {
             };
             /** @description Missing, invalid or expired access token. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Service temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    upload_receipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_receipt"];
+            };
+        };
+        responses: {
+            /** @description This client_id was uploaded before. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Receipt"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Receipt"];
+                };
+            };
+            /** @description Missing, invalid or expired access token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description The client_id is already used. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Service temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    get_receipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Receipt"];
+                };
+            };
+            /** @description Missing, invalid or expired access token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Receipt not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Service temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    discard_receipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired access token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Receipt not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description The receipt was saved. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Service temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    confirm_receipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceiptConfirm"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptConfirmed"];
+                };
+            };
+            /** @description Missing, invalid or expired access token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Receipt not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description The receipt failed to read or was already deleted. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

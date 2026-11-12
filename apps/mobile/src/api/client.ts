@@ -172,3 +172,52 @@ export async function unwrap<T>(call: () => Promise<FetchResult<T>>): Promise<T>
 function isProblem(value: unknown): value is Problem {
   return typeof value === 'object' && value !== null && 'type' in value && 'status' in value;
 }
+
+/** Receipt uploads send a photo and wait for OCR: allow more time than a normal request. */
+export const UPLOAD_TIMEOUT_MS = 60_000;
+
+/**
+ * POST a multipart form (openapi-fetch can't stream React Native file parts). `makeBody`
+ * builds a fresh FormData per attempt, so the 401 refresh-and-retry resends the photo.
+ * Returns the parsed JSON and the status (200 = the server already had this upload).
+ */
+export async function postForm<T>(
+  path: string,
+  makeBody: () => FormData,
+  timeoutMs: number = UPLOAD_TIMEOUT_MS,
+): Promise<{ data: T; status: number }> {
+  const base = apiBaseUrl();
+  if (!base) throw new ApiError('config', 0);
+
+  const attempt = async (token: string | null): Promise<Response> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      // No Content-Type header: fetch adds the multipart boundary itself.
+      return await globalThis.fetch(`${base}${path}`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: makeBody(),
+        signal: controller.signal,
+      });
+    } catch {
+      throw new ApiError('network', 0);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  const token = await accessToken(false);
+  let response = await attempt(token);
+  if (response.status === 401 && token) {
+    const refreshed = await accessToken(true).catch(() => null);
+    if (refreshed && refreshed !== token) response = await attempt(refreshed);
+  }
+  const body: unknown = await response.json().catch(() => undefined);
+  if (response.ok) return { data: body as T, status: response.status };
+  throw new ApiError(
+    kindForStatus(response.status),
+    response.status,
+    isProblem(body) ? body : undefined,
+  );
+}

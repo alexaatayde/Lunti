@@ -72,6 +72,18 @@ export const colors = {
   /** Border of the floating callout cards on Welcome. */
   calloutBorder: '#EEF1EA',
 
+  // Scan camera (ScanCamera.html; a dark screen around the live camera preview)
+  cameraBg: '#0F1A14',
+  cameraSurface: '#1B2621',
+  cameraControl: '#24322A',
+  cameraTrack: '#2C3A32',
+  cameraMuted: '#A3B5AA',
+  cameraFrame: 'rgba(134,217,166,0.7)',
+  cameraHintBg: 'rgba(15,26,20,0.82)',
+  cameraAccent: '#86D9A6',
+  /** Captured photo backdrop on Receipt scan (ScanReview.html viewfinder). */
+  reviewViewfinder: '#E5EFE1',
+
   // Logo (use the PNGs in assets/brand; listed for completeness)
   logoText: '#37443B',
   logoLeaf: '#70A44F',

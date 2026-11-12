@@ -8,6 +8,7 @@ from app.core.errors import PROBLEM_JSON, Problem, register_error_handlers
 from app.modules.expenses.budgets_router import router as budgets_router
 from app.modules.expenses.router import router as categories_router
 from app.modules.expenses.transactions_router import router as transactions_router
+from app.modules.receipts.router import router as receipts_router
 from app.modules.users.router import router as me_router
 
 
@@ -18,7 +19,7 @@ def _operation_id(route: APIRoute) -> str:
 
 app = FastAPI(
     title="Lunti API",
-    version="0.3.0",
+    version="0.4.0",
     generate_unique_id_function=_operation_id,
 )
 register_error_handlers(app)
@@ -29,6 +30,7 @@ api_v1.include_router(me_router)
 api_v1.include_router(categories_router)
 api_v1.include_router(transactions_router)
 api_v1.include_router(budgets_router)
+api_v1.include_router(receipts_router)
 app.include_router(api_v1)
 
 
