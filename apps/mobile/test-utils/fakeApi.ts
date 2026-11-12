@@ -35,7 +35,49 @@ export const EMPTY_SUMMARY = {
   by_category: [],
 };
 
+/** GET /analytics/summary for a user with no spending (monthly, Oct 21 2026). */
+export function analyticsSummary(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    period: 'monthly',
+    start: '2026-10-01',
+    end: '2026-10-21',
+    previous_start: '2026-09-01',
+    previous_end: '2026-09-21',
+    compared_until: '2026-09-21T10:00:00Z',
+    total: '0.00',
+    previous_total: '0.00',
+    change_amount: '0.00',
+    change_pct: null,
+    transaction_count: 0,
+    by_category: [],
+    trend_granularity: 'week',
+    trend: [
+      ['2026-10-01', '2026-10-07', false],
+      ['2026-10-08', '2026-10-14', false],
+      ['2026-10-15', '2026-10-21', false],
+      ['2026-10-22', '2026-10-31', true],
+    ].map(([start, end, future]) => ({ start, end, total: '0.00', is_future: future })),
+    ...overrides,
+  };
+}
+
+export function productPattern(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    product: { id: 'p-rice', name: 'Rice 5kg', unit: 'bag' },
+    purchase_count: 6,
+    data_tier: 'sufficient',
+    avg_interval_days: '12.20',
+    interval_stddev_days: '1.10',
+    confidence: '0.910',
+    last_purchased_at: '2026-10-11T02:30:00Z',
+    average_spend: '285.00',
+    ...overrides,
+  };
+}
+
 const DEFAULTS: Record<string, unknown> = {
+  'GET /api/v1/analytics/summary': analyticsSummary(),
+  'GET /api/v1/analytics/patterns': [],
   'GET /api/v1/me': ME,
   'GET /api/v1/me/preferences': {
     notify_budget: true,

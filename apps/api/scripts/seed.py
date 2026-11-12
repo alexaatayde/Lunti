@@ -4,7 +4,8 @@ Safety
 - Never reads DATABASE_URL: the target must be given with --database-url or SEED_DATABASE_URL.
 - Refuses non-local hosts (e.g. the live Supabase project) unless --allow-remote is passed.
 - Only INSERTs rows with deterministic ids (`on conflict do nothing`): running it twice
-  changes nothing, and existing rows are never updated or deleted.
+  changes nothing, and existing rows are never updated or deleted. The one exception is the
+  derived purchase_patterns cache, which is recomputed for the user from their history.
 - Writes only to the one user given by --user-id (or the local demo user).
 
 Usage (from apps/api):
@@ -26,8 +27,11 @@ from decimal import ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import Connection, create_engine, make_url, text
+from sqlalchemy.orm import Session
 
+from app.core.auth import CurrentUser
 from app.core.config import to_sqlalchemy_url
+from app.modules.analytics import patterns
 
 MANILA = ZoneInfo("Asia/Manila")
 NAMESPACE = uuid.UUID("6f1c1f0e-0b7a-4c55-9a43-3d8f6c2b9e10")
@@ -228,6 +232,14 @@ def seed(conn: Connection, user_id: uuid.UUID, end: date, weeks: int, rng_seed: 
                 "l": limit,
             },
         )
+
+    # Purchase patterns from the (seeded and any existing) history (AGENTS.md §7.3).
+    with Session(bind=conn) as session:
+        patterns.refresh_all(session, CurrentUser(id=user_id, email=None, claims={}))
+        session.flush()
+    counts["patterns"] = conn.execute(
+        text("select count(*) from purchase_patterns where user_id = :u"), {"u": user_id}
+    ).scalar_one()
     return counts
 
 

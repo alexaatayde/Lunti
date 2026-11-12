@@ -145,6 +145,28 @@ OCR_PROVIDER=fixture RECEIPT_STORAGE=local uvicorn app.main:app --reload --host 
 `DATABASE_URL` tip: if the database password contains `@`, `:`, `/`, `#` or `%`, URL-encode
 it (`@` → `%40`), otherwise the host is read wrongly and `/health/db` returns 503.
 
+### Analytics and purchase patterns
+
+`GET /api/v1/analytics/summary?period=daily|weekly|monthly` and `GET /api/v1/analytics/patterns`.
+All figures are SQL sums of the user's transactions; dates are local to Asia/Manila.
+
+- **Comparisons:** daily = today vs yesterday (7-day trend); weekly = Monday → today vs the same
+  weekdays last week; monthly = the 1st → today vs the same days last month (clamped to a
+  shorter month). Today isn't over, so the previous window stops at the same time of day
+  (`compared_until`); the app says so under the comparison.
+- **Patterns** come from confirmed receipt line items, counted per purchase day. Data tiers:
+  fewer than 3 days = insufficient (no interval, nothing predicted), 3–4 = limited, 5+ =
+  sufficient (`PATTERN_MIN_PURCHASES_LIMITED` / `PATTERN_MIN_PURCHASES_SUFFICIENT`).
+  `confidence` is a heuristic consistency score (sample size × regularity of intervals), not a
+  statistical probability. Labels: High confidence (sufficient, ≥ 0.6), Irregular timing
+  (sufficient, < 0.6), Limited data, Insufficient data.
+- **Product matching limitation:** line items match products by normalized name only (case,
+  spacing and punctuation ignored; sizes kept, so "Rice 2kg" ≠ "Rice 5kg"). Variants and
+  inconsistent receipt names ("Eggs (12)" vs "Eggs 1 tray", abbreviations, OCR misreads) become
+  separate products, which splits their history. No fuzzy matching or merging yet.
+- **Not built:** the design's "Recurring expenses" card (detection rules not approved yet).
+- `python -m scripts.seed` also computes patterns for the seeded history.
+
 ### Mobile API client
 
 After changing an endpoint: `python -m scripts.export_openapi` (apps/api), then

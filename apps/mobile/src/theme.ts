@@ -85,6 +85,20 @@ export const colors = {
   reviewViewfinder: '#E5EFE1',
 
   // Logo (use the PNGs in assets/brand; listed for completeness)
+  /**
+   * Analytics.html charts, redrawn in the current green (DESIGN_HANDOFF.md §6): donut slices
+   * darkest → lightest by share, trend bars, and the highest bar.
+   */
+  chart1: '#1F4812',
+  chart2: '#3E7525',
+  chart3: '#539E2F',
+  chart4: '#8CC46B',
+  chart5: '#C9E3B5',
+  chartBar: '#9CCB7E',
+  chartBarPeak: '#3E7525',
+  /** Analytics.html "Not enough data" badge (dashed border). */
+  dashedBorder: '#B7C6BC',
+
   logoText: '#37443B',
   logoLeaf: '#70A44F',
 } as const;

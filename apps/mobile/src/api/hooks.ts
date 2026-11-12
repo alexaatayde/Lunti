@@ -276,3 +276,31 @@ export function discardReceipt(receiptId: string) {
     }),
   );
 }
+
+// ---------- analytics (build step 5) ----------
+
+export type AnalyticsPeriod = 'daily' | 'weekly' | 'monthly';
+export type AnalyticsSummary = components['schemas']['AnalyticsSummary'];
+export type ProductPattern = components['schemas']['ProductPattern'];
+export type CategoryTotal = components['schemas']['CategoryTotal'];
+
+export const analyticsKeys = {
+  summary: (period: AnalyticsPeriod) => ['analytics', 'summary', period] as const,
+  patterns: ['patterns'] as const,
+};
+
+/** Spending so far this day/week/month vs the same span before (all sums by the API). */
+export function useAnalyticsSummary(period: AnalyticsPeriod) {
+  return useQuery({
+    queryKey: analyticsKeys.summary(period),
+    queryFn: () =>
+      unwrap(() => api.GET('/api/v1/analytics/summary', { params: { query: { period } } })),
+  });
+}
+
+export function usePurchasePatterns() {
+  return useQuery({
+    queryKey: analyticsKeys.patterns,
+    queryFn: () => unwrap(() => api.GET('/api/v1/analytics/patterns')),
+  });
+}

@@ -42,6 +42,11 @@ def app_tz() -> ZoneInfo:
     return ZoneInfo(settings.tz)
 
 
+def local_now() -> datetime:
+    """The current moment in the app time zone."""
+    return datetime.now(app_tz())
+
+
 def local_today(now: datetime | None = None) -> date:
     return (now or datetime.now(app_tz())).astimezone(app_tz()).date()
 

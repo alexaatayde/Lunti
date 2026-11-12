@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # Below this mean word confidence (0–1) a scan is treated as unreadable.
     ocr_min_confidence: float = 0.5
     receipt_max_bytes: int = 10 * 1024 * 1024
+
+    # Purchase-pattern data tiers (AGENTS.md §7.3; approved 2026-11-12, configurable).
+    # Fewer purchase days than `limited` → insufficient; fewer than `sufficient` → limited.
+    pattern_min_purchases_limited: int = 3
+    pattern_min_purchases_sufficient: int = 5
     openai_api_key: str = ""
     openai_model: str = ""
     fcm_credentials: str = ""

@@ -1,5 +1,5 @@
 /** Transactions tab (Transactions.html, SRS 3.1.1): search, month + category filters, history. */
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
@@ -48,6 +48,13 @@ import {
 import { formatMoney } from '../../../src/lib/money';
 import { colors, font, radius, spacing } from '../../../src/theme';
 
+function parseMonth(value: string | undefined): MonthKey | null {
+  const match = /^(\d{4})-(\d{2})$/.exec(value ?? '');
+  if (!match) return null;
+  const month = Number(match[2]);
+  return month >= 1 && month <= 12 ? { year: Number(match[1]), month } : null;
+}
+
 function useDebounced<T>(value: T, ms = 300): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -59,8 +66,18 @@ function useDebounced<T>(value: T, ms = 300): T {
 
 export default function TransactionsScreen() {
   const insets = useSafeAreaInsets();
-  const [month, setMonth] = useState<MonthKey>(() => currentMonth());
-  const [categoryId, setCategoryId] = useState<string | undefined>();
+  // Analytics opens this tab on one category and month (?category=<id>&month=YYYY-MM).
+  const params = useLocalSearchParams<{ category?: string; month?: string }>();
+  const [month, setMonth] = useState<MonthKey>(() => parseMonth(params.month) ?? currentMonth());
+  const [categoryId, setCategoryId] = useState<string | undefined>(params.category);
+  const [opened, setOpened] = useState({ category: params.category, month: params.month });
+  if (opened.category !== params.category || opened.month !== params.month) {
+    // New link while the tab stays mounted: apply it (state update during render, not an effect).
+    setOpened({ category: params.category, month: params.month });
+    if (params.category) setCategoryId(params.category);
+    const linked = parseMonth(params.month);
+    if (linked) setMonth(linked);
+  }
   const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [monthOpen, setMonthOpen] = useState(false);

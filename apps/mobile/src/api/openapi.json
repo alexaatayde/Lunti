@@ -1,6 +1,116 @@
 {
   "components": {
     "schemas": {
+      "AnalyticsSummary": {
+        "description": "Spending for the current period so far, compared with the same span of the previous\nperiod. All figures are SQL sums of the user's transactions (AGENTS.md \u00a74.2).",
+        "properties": {
+          "by_category": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryTotal"
+            },
+            "title": "By Category",
+            "type": "array"
+          },
+          "change_amount": {
+            "description": "total \u2212 previous_total (negative = less).",
+            "title": "Change Amount",
+            "type": "string"
+          },
+          "change_pct": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whole percent change vs previous_total; null when previous_total is 0.",
+            "title": "Change Pct"
+          },
+          "compared_until": {
+            "description": "The previous window stops here: the current time of day on previous_end, so an unfinished today is compared like for like.",
+            "format": "date-time",
+            "title": "Compared Until",
+            "type": "string"
+          },
+          "end": {
+            "description": "Today (Asia/Manila).",
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "period": {
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly"
+            ],
+            "title": "Period",
+            "type": "string"
+          },
+          "previous_end": {
+            "format": "date",
+            "title": "Previous End",
+            "type": "string"
+          },
+          "previous_start": {
+            "format": "date",
+            "title": "Previous Start",
+            "type": "string"
+          },
+          "previous_total": {
+            "title": "Previous Total",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "string"
+          },
+          "transaction_count": {
+            "title": "Transaction Count",
+            "type": "integer"
+          },
+          "trend": {
+            "items": {
+              "$ref": "#/components/schemas/TrendBucket"
+            },
+            "title": "Trend",
+            "type": "array"
+          },
+          "trend_granularity": {
+            "enum": [
+              "day",
+              "week"
+            ],
+            "title": "Trend Granularity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "period",
+          "start",
+          "end",
+          "previous_start",
+          "previous_end",
+          "compared_until",
+          "total",
+          "previous_total",
+          "change_amount",
+          "change_pct",
+          "transaction_count",
+          "by_category",
+          "trend_granularity",
+          "trend"
+        ],
+        "title": "AnalyticsSummary",
+        "type": "object"
+      },
       "Body_upload_receipt": {
         "properties": {
           "client_id": {
@@ -1038,6 +1148,122 @@
         "title": "Problem",
         "type": "object"
       },
+      "ProductPattern": {
+        "properties": {
+          "average_spend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average paid per purchase day.",
+            "title": "Average Spend"
+          },
+          "avg_interval_days": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when data is insufficient.",
+            "title": "Avg Interval Days"
+          },
+          "confidence": {
+            "description": "0\u20131 heuristic consistency score (sample size \u00d7 regularity of intervals), not a statistical probability; 0 when data is insufficient.",
+            "title": "Confidence",
+            "type": "string"
+          },
+          "data_tier": {
+            "enum": [
+              "sufficient",
+              "limited",
+              "insufficient"
+            ],
+            "title": "Data Tier",
+            "type": "string"
+          },
+          "interval_stddev_days": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Stddev Days"
+          },
+          "last_purchased_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Purchased At"
+          },
+          "product": {
+            "$ref": "#/components/schemas/ProductRef"
+          },
+          "purchase_count": {
+            "description": "Distinct days the product was bought.",
+            "title": "Purchase Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "product",
+          "purchase_count",
+          "data_tier",
+          "avg_interval_days",
+          "interval_stddev_days",
+          "confidence",
+          "last_purchased_at",
+          "average_spend"
+        ],
+        "title": "ProductPattern",
+        "type": "object"
+      },
+      "ProductRef": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "unit"
+        ],
+        "title": "ProductRef",
+        "type": "object"
+      },
       "Receipt": {
         "properties": {
           "confidence": {
@@ -1978,6 +2204,37 @@
         },
         "title": "TransactionUpdate",
         "type": "object"
+      },
+      "TrendBucket": {
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "is_future": {
+            "description": "The bucket starts after today (no spending yet).",
+            "title": "Is Future",
+            "type": "boolean"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "total",
+          "is_future"
+        ],
+        "title": "TrendBucket",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -1989,10 +2246,149 @@
   },
   "info": {
     "title": "Lunti API",
-    "version": "0.4.0"
+    "version": "0.5.0"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/analytics/patterns": {
+      "get": {
+        "operationId": "analytics_patterns",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProductPattern"
+                  },
+                  "title": "Response Analytics Patterns",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Missing, invalid or expired access token."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Validation error."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Service temporarily unavailable."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "How often each product is bought, with its data tier (sufficient/limited/insufficient)",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/v1/analytics/summary": {
+      "get": {
+        "operationId": "analytics_summary",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "monthly",
+              "enum": [
+                "daily",
+                "weekly",
+                "monthly"
+              ],
+              "title": "Period",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Missing, invalid or expired access token."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Validation error."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Service temporarily unavailable."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Spending so far this day/week/month vs the same span of the previous one",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
     "/api/v1/budgets": {
       "get": {
         "operationId": "list_budgets",

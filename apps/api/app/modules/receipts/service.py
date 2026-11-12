@@ -14,6 +14,7 @@ The draft is not stored as columns: it is rebuilt from `ocr_raw_text` by the det
 parser, with the per-field confidences stored at upload time.
 """
 
+import dataclasses
 import logging
 from datetime import UTC, datetime
 from decimal import ROUND_DOWN, Decimal
@@ -26,6 +27,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import CurrentUser
 from app.core.config import settings
 from app.core.errors import ApiError, FieldError, invalid_field, not_found
+from app.modules.analytics import patterns, products
 from app.modules.expenses import periods, transaction_service
 from app.modules.expenses import service as categories_service
 from app.modules.expenses.schemas import CategoryRef
@@ -385,6 +387,7 @@ def allocate_discount(
             unit_price=line.unit_price,
             discount=line.discount + share,
             line_total=line.line_total - share,
+            product_id=line.product_id,
         )
         for line, share in zip(lines, shares, strict=True)
     ]
@@ -410,6 +413,11 @@ def confirm_receipt(
 
     lines = _priced_lines(body)
     _check_sum(body, lines)
+    product_ids = products.match_or_create(db, user, [(line.name, line.unit) for line in lines])
+    lines = [
+        dataclasses.replace(line, product_id=product_id)
+        for line, product_id in zip(lines, product_ids, strict=True)
+    ]
     saved = transaction_service.create_from_receipt(
         db,
         user,
@@ -424,7 +432,8 @@ def confirm_receipt(
     row.ocr_status = "confirmed"
     row.confirmed_at = datetime.now(UTC)
     db.flush()
-    # Purchase patterns (step 5) and pantry estimates (step 7) will hook in here.
+    patterns.refresh(db, user, {p for p in product_ids if p is not None})
+    # Pantry estimates (step 7) will hook in here.
     return ReceiptConfirmed(**saved.model_dump(), already_confirmed=False)
 
 

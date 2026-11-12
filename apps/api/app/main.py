@@ -5,6 +5,7 @@ from sqlalchemy import text
 import app.models  # noqa: F401  (registers every table, so foreign keys resolve at runtime)
 from app.core.db import get_engine
 from app.core.errors import PROBLEM_JSON, Problem, register_error_handlers
+from app.modules.analytics.router import router as analytics_router
 from app.modules.expenses.budgets_router import router as budgets_router
 from app.modules.expenses.router import router as categories_router
 from app.modules.expenses.transactions_router import router as transactions_router
@@ -19,7 +20,7 @@ def _operation_id(route: APIRoute) -> str:
 
 app = FastAPI(
     title="Lunti API",
-    version="0.4.0",
+    version="0.5.0",
     generate_unique_id_function=_operation_id,
 )
 register_error_handlers(app)
@@ -31,6 +32,7 @@ api_v1.include_router(categories_router)
 api_v1.include_router(transactions_router)
 api_v1.include_router(budgets_router)
 api_v1.include_router(receipts_router)
+api_v1.include_router(analytics_router)
 app.include_router(api_v1)
 
 

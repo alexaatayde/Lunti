@@ -4,6 +4,40 @@
  */
 
 export interface paths {
+    "/api/v1/analytics/patterns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How often each product is bought, with its data tier (sufficient/limited/insufficient) */
+        get: operations["analytics_patterns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Spending so far this day/week/month vs the same span of the previous one */
+        get: operations["analytics_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/budgets": {
         parameters: {
             query?: never;
@@ -277,6 +311,70 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AnalyticsSummary
+         * @description Spending for the current period so far, compared with the same span of the previous
+         *     period. All figures are SQL sums of the user's transactions (AGENTS.md §4.2).
+         */
+        AnalyticsSummary: {
+            /** By Category */
+            by_category: components["schemas"]["CategoryTotal"][];
+            /**
+             * Change Amount
+             * @description total − previous_total (negative = less).
+             */
+            change_amount: string;
+            /**
+             * Change Pct
+             * @description Whole percent change vs previous_total; null when previous_total is 0.
+             */
+            change_pct: number | null;
+            /**
+             * Compared Until
+             * Format: date-time
+             * @description The previous window stops here: the current time of day on previous_end, so an unfinished today is compared like for like.
+             */
+            compared_until: string;
+            /**
+             * End
+             * Format: date
+             * @description Today (Asia/Manila).
+             */
+            end: string;
+            /**
+             * Period
+             * @enum {string}
+             */
+            period: "daily" | "weekly" | "monthly";
+            /**
+             * Previous End
+             * Format: date
+             */
+            previous_end: string;
+            /**
+             * Previous Start
+             * Format: date
+             */
+            previous_start: string;
+            /** Previous Total */
+            previous_total: string;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /** Total */
+            total: string;
+            /** Transaction Count */
+            transaction_count: number;
+            /** Trend */
+            trend: components["schemas"]["TrendBucket"][];
+            /**
+             * Trend Granularity
+             * @enum {string}
+             */
+            trend_granularity: "day" | "week";
+        };
         /** Body_upload_receipt */
         Body_upload_receipt: {
             /**
@@ -676,6 +774,51 @@ export interface components {
             /** Type */
             type: string;
         };
+        /** ProductPattern */
+        ProductPattern: {
+            /**
+             * Average Spend
+             * @description Average paid per purchase day.
+             */
+            average_spend: string | null;
+            /**
+             * Avg Interval Days
+             * @description Null when data is insufficient.
+             */
+            avg_interval_days: string | null;
+            /**
+             * Confidence
+             * @description 0–1 heuristic consistency score (sample size × regularity of intervals), not a statistical probability; 0 when data is insufficient.
+             */
+            confidence: string;
+            /**
+             * Data Tier
+             * @enum {string}
+             */
+            data_tier: "sufficient" | "limited" | "insufficient";
+            /** Interval Stddev Days */
+            interval_stddev_days: string | null;
+            /** Last Purchased At */
+            last_purchased_at: string | null;
+            product: components["schemas"]["ProductRef"];
+            /**
+             * Purchase Count
+             * @description Distinct days the product was bought.
+             */
+            purchase_count: number;
+        };
+        /** ProductRef */
+        ProductRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Unit */
+            unit: string | null;
+        };
         /** Receipt */
         Receipt: {
             confidence: components["schemas"]["Confidence"] | null;
@@ -997,6 +1140,26 @@ export interface components {
             /** Occurred At */
             occurred_at?: string | null;
         };
+        /** TrendBucket */
+        TrendBucket: {
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /**
+             * Is Future
+             * @description The bucket starts after today (no spending yet).
+             */
+            is_future: boolean;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /** Total */
+            total: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1006,6 +1169,108 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    analytics_patterns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductPattern"][];
+                };
+            };
+            /** @description Missing, invalid or expired access token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Service temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    analytics_summary: {
+        parameters: {
+            query?: {
+                period?: "daily" | "weekly" | "monthly";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsSummary"];
+                };
+            };
+            /** @description Missing, invalid or expired access token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Service temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
     list_budgets: {
         parameters: {
             query?: never;

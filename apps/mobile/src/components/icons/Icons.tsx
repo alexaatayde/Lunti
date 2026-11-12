@@ -122,6 +122,26 @@ export function ArrowRightIcon(props: IconProps) {
   );
 }
 
+/** Analytics.html "12% less" (spending went down) */
+export function ArrowDownIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={2.2} {...props}>
+      <Line x1={12} x2={12} y1={5} y2={19} />
+      <Polyline points="19 12 12 19 5 12" />
+    </IconBase>
+  );
+}
+
+/** Analytics: spending went up */
+export function ArrowUpIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={2.2} {...props}>
+      <Line x1={12} x2={12} y1={19} y2={5} />
+      <Polyline points="5 12 12 5 19 12" />
+    </IconBase>
+  );
+}
+
 /** Transactions.html (header avatar) */
 export function UserIcon(props: IconProps) {
   return (

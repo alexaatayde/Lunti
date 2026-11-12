@@ -17,7 +17,8 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import CurrentUser
 from app.core.errors import ApiError, invalid_field, not_found
-from app.modules.expenses import budget_service, periods
+from app.modules.analytics import patterns
+from app.modules.expenses import budget_service, periods, purchase_history
 from app.modules.expenses.models import Category, Transaction, TransactionLineItem
 from app.modules.expenses.schemas import (
     CategoryRef,
@@ -297,6 +298,7 @@ def update_transaction(
                 "This total comes from the receipt's items. Edit the items instead.",
             )
         row.amount = data.amount
+    moved = data.occurred_at is not None and data.occurred_at != row.occurred_at
     if data.occurred_at is not None:
         row.occurred_at = data.occurred_at
     if "merchant" in fields:
@@ -305,6 +307,8 @@ def update_transaction(
         row.note = data.note
     db.flush()
     alerts = budget_service.recalculate(db, user, touched)
+    if moved:  # purchase dates changed: patterns of its products change too (AGENTS.md §7.3)
+        patterns.refresh(db, user, purchase_history.products_in_transaction(db, user, row.id))
     db.refresh(row)
     count = _item_counts(db, [row.id]).get(row.id, 0)
     return TransactionSaved(
@@ -321,9 +325,11 @@ def _has_items(db: Session, transaction_id: UUID) -> bool:
 def delete_transaction(db: Session, user: CurrentUser, transaction_id: UUID) -> None:
     row = _get_own(db, user, transaction_id)
     category_id = row.category_id
+    products = purchase_history.products_in_transaction(db, user, row.id)
     db.delete(row)  # line items cascade
     db.flush()
     budget_service.recalculate(db, user, {category_id})
+    patterns.refresh(db, user, products)
 
 
 # ---------- receipts (build step 4) ----------
@@ -339,6 +345,7 @@ class ReceiptLine:
     unit_price: Decimal
     discount: Decimal
     line_total: Decimal
+    product_id: UUID | None = None
 
 
 def create_from_receipt(
@@ -372,6 +379,7 @@ def create_from_receipt(
     db.add_all(
         TransactionLineItem(
             transaction_id=row.id,
+            product_id=line.product_id,
             name=line.name,
             quantity=line.quantity,
             unit=line.unit,
