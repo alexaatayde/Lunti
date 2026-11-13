@@ -88,7 +88,16 @@ export const moneyKeys = {
  */
 export function invalidateMoney(client: ReturnType<typeof useQueryClient>) {
   return Promise.all(
-    [['transactions'], ['budgets'], ['analytics'], ['patterns']].map((queryKey) =>
+    // Purchases also move restock suggestions, the list's budget check and budget alerts.
+    [
+      ['transactions'],
+      ['budgets'],
+      ['analytics'],
+      ['patterns'],
+      ['replenishment'],
+      ['shopping-list'],
+      ['notifications'],
+    ].map((queryKey) =>
       client.invalidateQueries({ queryKey }),
     ),
   );
@@ -303,4 +312,173 @@ export function usePurchasePatterns() {
     queryKey: analyticsKeys.patterns,
     queryFn: () => unwrap(() => api.GET('/api/v1/analytics/patterns')),
   });
+}
+
+// ---------- replenishment, shopping list, notifications (build step 6) ----------
+
+export type Suggestion = components['schemas']['Suggestion'];
+export type FeedbackAction = components['schemas']['SuggestionFeedback']['action'];
+export type SuggestionFeedback = components['schemas']['SuggestionFeedback'];
+export type ShoppingList = components['schemas']['ShoppingList'];
+export type ShoppingListItem = components['schemas']['ShoppingListItem'];
+export type ItemCreate = components['schemas']['ItemCreate'];
+export type ItemUpdate = components['schemas']['ItemUpdate'];
+export type AppNotification = components['schemas']['NotificationOut'];
+export type MutedProduct = components['schemas']['MutedProduct'];
+export type NotificationPage = components['schemas']['NotificationPage'];
+
+export const step6Keys = {
+  suggestions: ['replenishment', 'suggestions'] as const,
+  shoppingList: ['shopping-list'] as const,
+  notifications: ['notifications'] as const,
+  muted: ['replenishment', 'muted'] as const,
+};
+
+/** After answering a suggestion or editing the list, these views change together. */
+function invalidateLists(client: ReturnType<typeof useQueryClient>) {
+  return Promise.all(
+    [step6Keys.suggestions, step6Keys.shoppingList, step6Keys.notifications].map((queryKey) =>
+      client.invalidateQueries({ queryKey }),
+    ),
+  );
+}
+
+export function useSuggestions() {
+  return useQuery({
+    queryKey: step6Keys.suggestions,
+    queryFn: () => unwrap(() => api.GET('/api/v1/replenishment/suggestions')),
+  });
+}
+
+export function useSuggestionFeedback() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: SuggestionFeedback }) =>
+      unwrap(() =>
+        api.POST('/api/v1/replenishment/suggestions/{suggestion_id}/feedback', {
+          params: { path: { suggestion_id: id } },
+          body,
+        }),
+      ),
+    onSuccess: () =>
+      Promise.all([
+        invalidateLists(client),
+        client.invalidateQueries({ queryKey: step6Keys.muted }),
+      ]),
+  });
+}
+
+/** The user's one grocery list (the API creates it on first use). */
+export function useShoppingList() {
+  return useQuery({
+    queryKey: step6Keys.shoppingList,
+    queryFn: () => unwrap(() => api.GET('/api/v1/shopping-lists')).then((lists) => lists[0]),
+  });
+}
+
+export function useAddListItem(listId: string | undefined) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ItemCreate) =>
+      unwrap(() =>
+        api.POST('/api/v1/shopping-lists/{list_id}/items', {
+          params: { path: { list_id: listId ?? '' } },
+          body,
+        }),
+      ),
+    onSuccess: () => invalidateLists(client),
+  });
+}
+
+export function useUpdateListItem(listId: string | undefined) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: ItemUpdate }) =>
+      unwrap(() =>
+        api.PATCH('/api/v1/shopping-lists/{list_id}/items/{item_id}', {
+          params: { path: { list_id: listId ?? '', item_id: id } },
+          body,
+        }),
+      ),
+    onSuccess: () => invalidateLists(client),
+  });
+}
+
+export function useDeleteListItem(listId: string | undefined) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(() =>
+        api.DELETE('/api/v1/shopping-lists/{list_id}/items/{item_id}', {
+          params: { path: { list_id: listId ?? '', item_id: id } },
+        }),
+      ),
+    onSuccess: () => invalidateLists(client),
+  });
+}
+
+export function useMutedProducts() {
+  return useQuery({
+    queryKey: step6Keys.muted,
+    queryFn: () => unwrap(() => api.GET('/api/v1/replenishment/muted')),
+  });
+}
+
+/** Turns reminders back on (also the Undo for "Don't remind"). */
+export function unmuteProduct(productId: string) {
+  return unwrap(() =>
+    api.DELETE('/api/v1/replenishment/muted/{product_id}', {
+      params: { path: { product_id: productId } },
+    }),
+  );
+}
+
+export function useUnmuteProduct() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: unmuteProduct,
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: ['replenishment'] }),
+        client.invalidateQueries({ queryKey: step6Keys.notifications }),
+      ]),
+  });
+}
+
+export function useNotifications() {
+  return useQuery({
+    queryKey: step6Keys.notifications,
+    queryFn: () => unwrap(() => api.GET('/api/v1/notifications')),
+  });
+}
+
+export function useMarkNotificationRead() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(() =>
+        api.POST('/api/v1/notifications/{notification_id}/read', {
+          params: { path: { notification_id: id } },
+        }),
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: step6Keys.notifications }),
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(() => api.POST('/api/v1/notifications/read-all')),
+    onSuccess: () => client.invalidateQueries({ queryKey: step6Keys.notifications }),
+  });
+}
+
+export function registerDevice(fcmToken: string, platform: 'android' | 'ios') {
+  return unwrap(() => api.POST('/api/v1/devices', { body: { fcm_token: fcmToken, platform } }));
+}
+
+export function unregisterDevice(fcmToken: string) {
+  return unwrap(() =>
+    api.DELETE('/api/v1/devices/{fcm_token}', { params: { path: { fcm_token: fcmToken } } }),
+  );
 }

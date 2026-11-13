@@ -32,6 +32,8 @@ from app.modules.expenses.schemas import (
     TransactionUpdate,
 )
 from app.modules.expenses.schemas import Transaction as TransactionOut
+from app.modules.notifications import service as notifications
+from app.modules.replenishment import service as replenishment
 
 DEFAULT_PAGE_SIZE = 30
 MAX_PAGE_SIZE = 100
@@ -277,6 +279,7 @@ def create_transaction(db: Session, user: CurrentUser, data: TransactionCreate) 
     db.add(row)
     db.flush()
     alerts = budget_service.recalculate(db, user, {category.id})
+    notifications.budget_alerts(db, user, alerts)
     db.refresh(row)
     return TransactionSaved(**_to_out(row, category, 0).model_dump(), budget_alerts=alerts)
 
@@ -307,8 +310,9 @@ def update_transaction(
         row.note = data.note
     db.flush()
     alerts = budget_service.recalculate(db, user, touched)
+    notifications.budget_alerts(db, user, alerts)
     if moved:  # purchase dates changed: patterns of its products change too (AGENTS.md §7.3)
-        patterns.refresh(db, user, purchase_history.products_in_transaction(db, user, row.id))
+        refresh_purchases(db, user, purchase_history.products_in_transaction(db, user, row.id))
     db.refresh(row)
     count = _item_counts(db, [row.id]).get(row.id, 0)
     return TransactionSaved(
@@ -329,7 +333,13 @@ def delete_transaction(db: Session, user: CurrentUser, transaction_id: UUID) -> 
     db.delete(row)  # line items cascade
     db.flush()
     budget_service.recalculate(db, user, {category_id})
-    patterns.refresh(db, user, products)
+    refresh_purchases(db, user, products)
+
+
+def refresh_purchases(db: Session, user: CurrentUser, product_ids: set[UUID]) -> None:
+    """Purchase history changed: patterns, then restock suggestions (§7.3–7.4)."""
+    patterns.refresh(db, user, product_ids)
+    replenishment.refresh(db, user, periods.local_today(), product_ids)
 
 
 # ---------- receipts (build step 4) ----------
@@ -392,6 +402,7 @@ def create_from_receipt(
     )
     db.flush()
     alerts = budget_service.recalculate(db, user, {category.id})
+    notifications.budget_alerts(db, user, alerts)
     db.refresh(row)
     return TransactionSaved(**_to_out(row, category, len(lines)).model_dump(), budget_alerts=alerts)
 

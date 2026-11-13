@@ -1,3 +1,6 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
 from sqlalchemy import text
@@ -5,11 +8,14 @@ from sqlalchemy import text
 import app.models  # noqa: F401  (registers every table, so foreign keys resolve at runtime)
 from app.core.db import get_engine
 from app.core.errors import PROBLEM_JSON, Problem, register_error_handlers
+from app.jobs.scheduler import start_scheduler
 from app.modules.analytics.router import router as analytics_router
 from app.modules.expenses.budgets_router import router as budgets_router
 from app.modules.expenses.router import router as categories_router
 from app.modules.expenses.transactions_router import router as transactions_router
+from app.modules.notifications.router import devices_router, notifications_router
 from app.modules.receipts.router import router as receipts_router
+from app.modules.replenishment.router import replenishment_router, shopping_router
 from app.modules.users.router import router as me_router
 
 
@@ -18,10 +24,22 @@ def _operation_id(route: APIRoute) -> str:
     return route.name
 
 
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    # Scheduled jobs (AGENTS.md §7.6) run in this process when SCHEDULER_ENABLED=true.
+    scheduler = start_scheduler()
+    try:
+        yield
+    finally:
+        if scheduler is not None:
+            scheduler.shutdown(wait=False)
+
+
 app = FastAPI(
     title="Lunti API",
-    version="0.5.0",
+    version="0.6.0",
     generate_unique_id_function=_operation_id,
+    lifespan=lifespan,
 )
 register_error_handlers(app)
 
@@ -33,6 +51,10 @@ api_v1.include_router(transactions_router)
 api_v1.include_router(budgets_router)
 api_v1.include_router(receipts_router)
 api_v1.include_router(analytics_router)
+api_v1.include_router(replenishment_router)
+api_v1.include_router(shopping_router)
+api_v1.include_router(notifications_router)
+api_v1.include_router(devices_router)
 app.include_router(api_v1)
 
 

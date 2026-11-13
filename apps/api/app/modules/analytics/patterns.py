@@ -142,3 +142,45 @@ def refresh_all(db: Session, user: CurrentUser) -> None:
     """Recompute every product of the user (seed data, future scheduled jobs)."""
     ids = set(db.scalars(select(Product.id).where(Product.user_id == user.id)))
     refresh(db, user, ids)
+
+
+@dataclass(frozen=True)
+class PatternInfo:
+    """A product's pattern for other modules (replenishment), without exposing the tables."""
+
+    pattern_id: UUID
+    product_id: UUID
+    product_name: str
+    product_unit: str | None
+    data_tier: DataTier
+    confidence: Decimal
+    avg_interval_days: Decimal | None
+    last_purchased_at: datetime | None
+
+
+def pattern_infos(
+    db: Session, user: CurrentUser, product_ids: set[UUID] | None = None
+) -> list[PatternInfo]:
+    """Every pattern of the user (or of these products), with its product's name."""
+    stmt = (
+        select(PurchasePattern, Product)
+        .join(Product, Product.id == PurchasePattern.product_id)
+        .where(PurchasePattern.user_id == user.id)
+    )
+    if product_ids is not None:
+        if not product_ids:
+            return []
+        stmt = stmt.where(PurchasePattern.product_id.in_(product_ids))
+    return [
+        PatternInfo(
+            pattern_id=p.id,
+            product_id=p.product_id,
+            product_name=product.name,
+            product_unit=product.default_unit,
+            data_tier=p.data_tier,
+            confidence=p.confidence_score,
+            avg_interval_days=p.avg_interval_days,
+            last_purchased_at=p.last_purchased_at,
+        )
+        for p, product in db.execute(stmt)
+    ]

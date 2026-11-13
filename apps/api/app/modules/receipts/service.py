@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import CurrentUser
 from app.core.config import settings
 from app.core.errors import ApiError, FieldError, invalid_field, not_found
-from app.modules.analytics import patterns, products
+from app.modules.analytics import products
 from app.modules.expenses import periods, transaction_service
 from app.modules.expenses import service as categories_service
 from app.modules.expenses.schemas import CategoryRef
@@ -432,7 +432,7 @@ def confirm_receipt(
     row.ocr_status = "confirmed"
     row.confirmed_at = datetime.now(UTC)
     db.flush()
-    patterns.refresh(db, user, {p for p in product_ids if p is not None})
+    transaction_service.refresh_purchases(db, user, {p for p in product_ids if p is not None})
     # Pantry estimates (step 7) will hook in here.
     return ReceiptConfirmed(**saved.model_dump(), already_confirmed=False)
 

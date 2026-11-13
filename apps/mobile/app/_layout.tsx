@@ -19,6 +19,7 @@ import { ToastHost } from '../src/features/money/ToastHost';
 import { isSupabaseConfigured } from '../src/lib/supabase';
 import { useSessionStore } from '../src/stores/session';
 import { colors } from '../src/theme';
+import { usePushNotifications } from '../src/features/notifications/push';
 
 // Keep the native splash up until fonts and the saved session have loaded.
 SplashScreen.preventAutoHideAsync();
@@ -40,6 +41,7 @@ export default function RootLayout() {
   useAuthListener();
   useResetQueriesOnUserChange();
   const status = useSessionStore((s) => s.status);
+  usePushNotifications(status === 'signedIn');
 
   // If fonts fail to load, carry on with the system font rather than a blank app.
   const ready = (fontsLoaded || !!fontError) && status !== 'loading';

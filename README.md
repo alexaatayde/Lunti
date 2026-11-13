@@ -167,6 +167,51 @@ All figures are SQL sums of the user's transactions; dates are local to Asia/Man
 - **Not built:** the design's "Recurring expenses" card (detection rules not approved yet).
 - `python -m scripts.seed` also computes patterns for the seeded history.
 
+### Restock suggestions, grocery list and notifications
+
+- **Suggestions** (`/replenishment/suggestions`): only products with a *sufficient* pattern
+  (5+ purchase days) and confidence ≥ 0.6. Predicted date = last purchase (or "bought
+  elsewhere" day) + average interval; shown when it's 3 days away or less (overdue included).
+  Answers: Add to list, I still have some (+ max(3, interval ÷ 2) days), Bought elsewhere
+  (cycle restarts today, no transaction), Don't remind (product muted, with Undo; muted items
+  can be turned back on from Notifications → Muted items, `GET/DELETE /replenishment/muted`),
+  Not now, Change date or quantity. One answered suggestion per product and purchase cycle;
+  unmuting reopens the same suggestion (same reminder key), so nothing is sent twice.
+  Settings: `REPLENISHMENT_MIN_CONFIDENCE`, `REPLENISHMENT_WINDOW_DAYS`, `STILL_HAVE_MIN_DAYS`.
+- **Grocery list** (`/shopping-lists`): one list per user; totals and the Groceries (else
+  overall) budget check are computed by the API. An unbought item with the same name can't be
+  added twice.
+- **Notifications** (`/notifications`, `/devices`): budget alerts (when a level rises),
+  restock reminders and a daily shopping reminder, each behind its preference switch.
+  Notifications are stored first and pushed after commit by the dispatcher.
+- **Scheduled jobs:** set `SCHEDULER_ENABLED=true` for the API process. Daily at 06:00
+  Asia/Manila (`DAILY_JOB_HOUR`) it refreshes suggestions and stores reminders; every minute
+  it pushes unsent notifications. Re-runs and multiple workers are safe (advisory lock,
+  de-duplication keys, `SKIP LOCKED`).
+- **Migration `0002_replenishment_notifications`** (additive, one transaction: two nullable
+  suggestion columns + a check, a notification key + unique index, a device-token function;
+  nothing is dropped or rewritten). Review the SQL first, then apply from `apps/api`:
+
+  ```bash
+  .venv/bin/alembic -x url=postgresql://offline/x upgrade 0001_initial_schema:head --sql
+                                                    # print 0002's SQL only (no connection)
+  .venv/bin/alembic current                         # expect 0001_initial_schema
+  .venv/bin/alembic upgrade head                    # uses DATABASE_URL from apps/api/.env
+  ```
+
+  Rollback (drops the new columns' values): `.venv/bin/alembic downgrade 0001_initial_schema`.
+
+**Push setup (not configured yet).** Without it, everything works except delivery to the phone.
+
+1. Choose the Android package name (`android.package` in `apps/mobile/app.json` isn't set
+   yet), then Firebase console → add a project → add an Android app with that package →
+   download `google-services.json`.
+2. Mobile: put the file in `apps/mobile/`, add `"googleServicesFile": "./google-services.json"`
+   under `android` in `app.json`, and make a development build (`npx expo run:android` or EAS).
+   Expo Go can't receive remote push on Android (SDK 53+).
+3. Backend: Project settings → Service accounts → generate a private key, store it outside the
+   repo, set `FCM_CREDENTIALS=/absolute/path/firebase-key.json` in `apps/api/.env`.
+
 ### Mobile API client
 
 After changing an endpoint: `python -m scripts.export_openapi` (apps/api), then

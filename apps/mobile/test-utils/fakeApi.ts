@@ -75,9 +75,77 @@ export function productPattern(overrides: Partial<Record<string, unknown>> = {})
   };
 }
 
+export const LIST_ID = 'l-1';
+
+export function shoppingList(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: LIST_ID,
+    name: 'Grocery list',
+    items: [],
+    open_count: 0,
+    purchased_count: 0,
+    estimated_total: '0.00',
+    picked_total: '0.00',
+    unpriced_count: 0,
+    budget: null,
+    ...overrides,
+  };
+}
+
+export function listItem(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'i-1',
+    name: 'Lemons',
+    quantity: '2.000',
+    unit: null,
+    est_price: '15.75',
+    line_estimate: '31.50',
+    is_purchased: false,
+    source: 'manual',
+    product_id: null,
+    recipe_id: null,
+    created_at: '2026-11-13T01:00:00Z',
+    ...overrides,
+  };
+}
+
+export function suggestion(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 's-1',
+    product: { id: 'p-eggs', name: 'Eggs (12)', unit: 'tray' },
+    predicted_date: '2026-11-15',
+    days_until: 2,
+    avg_interval_days: '7.00',
+    confidence: '1.000',
+    status: 'pending',
+    quantity: null,
+    last_purchased_at: '2026-11-08T01:00:00Z',
+    ...overrides,
+  };
+}
+
+export function notification(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'n-1',
+    type: 'budget',
+    title: 'Groceries budget exceeded',
+    body: "You've spent ₱106.00 of your ₱100.00 Groceries budget.",
+    deep_link: '/budget',
+    level: 'exceeded',
+    suggestion: null,
+    created_at: new Date(Date.now() - 2 * 3600_000).toISOString(),
+    read_at: null,
+    ...overrides,
+  };
+}
+
 const DEFAULTS: Record<string, unknown> = {
   'GET /api/v1/analytics/summary': analyticsSummary(),
   'GET /api/v1/analytics/patterns': [],
+  'GET /api/v1/replenishment/suggestions': [],
+  'GET /api/v1/shopping-lists': [shoppingList()],
+  'GET /api/v1/notifications': { items: [], unread_count: 0 },
+  'GET /api/v1/replenishment/muted': [],
   'GET /api/v1/me': ME,
   'GET /api/v1/me/preferences': {
     notify_budget: true,

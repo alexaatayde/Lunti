@@ -26,6 +26,7 @@ class ReplenishmentSuggestion(IdMixin, TimestampMixin, Base):
     __table_args__ = (
         CheckConstraint("status in ('pending', 'added', 'dismissed', 'modified')", name="status"),
         CheckConstraint("confidence_score between 0 and 1", name="confidence_range"),
+        CheckConstraint("quantity is null or quantity > 0", name="quantity_positive"),
         # At most one open suggestion per product, so the daily job can upsert.
         Index(
             "uq_replenishment_suggestions_pending",
@@ -49,6 +50,10 @@ class ReplenishmentSuggestion(IdMixin, TimestampMixin, Base):
     predicted_date: Mapped[date] = mapped_column(Date, nullable=False)
     confidence_score: Mapped[Decimal] = mapped_column(Numeric(4, 3), nullable=False)
     status: Mapped[str] = mapped_column(Text, server_default=text("'pending'"), nullable=False)
+    # Purchase (or "bought elsewhere") day this suggestion's cycle starts from (migration 0002).
+    anchor_date: Mapped[date | None] = mapped_column(Date)
+    # Quantity chosen with "Modify"; used when the item is added to the list.
+    quantity: Mapped[Decimal | None] = mapped_column(Numeric(10, 3))
 
 
 class ShoppingList(IdMixin, TimestampMixin, Base):

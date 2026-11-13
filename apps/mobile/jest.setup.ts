@@ -8,3 +8,6 @@ jest.mock('expo-camera', () => require('./test-utils/fakeCamera').cameraModuleMo
 jest.mock('expo-image-picker', () => require('./test-utils/fakeCamera').pickerModuleMock);
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('expo-file-system', () => require('./test-utils/fakeCamera').fileSystemModuleMock);
+// No push service in Jest: permission is denied unless a test changes it.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+jest.mock('expo-notifications', () => require('./test-utils/fakeNotifications').notificationsModuleMock);

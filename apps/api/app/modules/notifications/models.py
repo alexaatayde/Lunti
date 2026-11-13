@@ -17,6 +17,8 @@ class Notification(IdMixin, TimestampMixin, Base):
     __tablename__ = "notifications"
     __table_args__ = (
         Index("ix_notifications_user_id_created_at", "user_id", text("created_at desc")),
+        # One notification per (user, key): repeated job runs insert each reminder once.
+        Index("uq_notifications_user_id_dedupe_key", "user_id", "dedupe_key", unique=True),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -29,6 +31,7 @@ class Notification(IdMixin, TimestampMixin, Base):
     deep_link: Mapped[str | None] = mapped_column(Text)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dedupe_key: Mapped[str | None] = mapped_column(Text)
 
 
 class DeviceToken(IdMixin, TimestampMixin, Base):

@@ -57,3 +57,15 @@ def match_or_create(
         ).all()
     )
     return [ids.get(key) if key else None for key in keys]
+
+
+def refs(db: Session, user: CurrentUser, ids: set[UUID]) -> dict[UUID, tuple[str, str | None]]:
+    """(name, default unit) per product id."""
+    if not ids:
+        return {}
+    rows = db.execute(
+        select(Product.id, Product.name, Product.default_unit).where(
+            Product.user_id == user.id, Product.id.in_(ids)
+        )
+    )
+    return {i: (name, unit) for i, name, unit in rows}

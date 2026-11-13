@@ -45,6 +45,19 @@ class Settings(BaseSettings):
     # Fewer purchase days than `limited` → insufficient; fewer than `sufficient` → limited.
     pattern_min_purchases_limited: int = 3
     pattern_min_purchases_sufficient: int = 5
+
+    # Replenishment (AGENTS.md §7.4; decisions approved 2026-11-13). Only sufficient-tier
+    # patterns with confidence >= the minimum get suggestions; a suggestion is due when its
+    # date is within the approach window. "I still have some" pushes the date by
+    # max(still_have_min_days, round(average interval / 2)).
+    replenishment_min_confidence: float = 0.6
+    replenishment_window_days: int = 3
+    still_have_min_days: int = 3
+
+    # Scheduled jobs (AGENTS.md §7.6) run inside the API process. Off unless enabled, so
+    # tests and one-off scripts never start background threads.
+    scheduler_enabled: bool = False
+    daily_job_hour: int = 6  # Asia/Manila (settings.tz)
     openai_api_key: str = ""
     openai_model: str = ""
     fcm_credentials: str = ""

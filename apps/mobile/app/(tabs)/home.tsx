@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   useBudgetStatus,
+  useNotifications,
   useTransactionSummary,
   type BudgetStatus,
   type TransactionSummary,
@@ -47,6 +48,7 @@ export default function HomeScreen() {
   const budgets = useBudgetStatus();
   const summary = useTransactionSummary(monthRange(month));
   const featured = budgets.data ? featuredBudget(budgets.data) : undefined;
+  const notifications = useNotifications();
 
   const refresh = () => {
     budgets.refetch();
@@ -55,7 +57,11 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <AppHeader onAvatarPress={() => router.push('/profile')} />
+      <AppHeader
+        onAvatarPress={() => router.push('/profile')}
+        onBellPress={() => router.push('/notifications')}
+        unreadCount={notifications.data?.unread_count ?? 0}
+      />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={

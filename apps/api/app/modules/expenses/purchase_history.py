@@ -9,6 +9,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session
 
 from app.core.auth import CurrentUser
@@ -104,3 +105,21 @@ def daily_totals(db: Session, user: CurrentUser, start: date, end: date) -> dict
         .group_by(day)
     )
     return {d: periods.money(total) for d, total in rows}
+
+
+def last_unit_prices(db: Session, user: CurrentUser, product_ids: set[UUID]) -> dict[UUID, Decimal]:
+    """The unit price the user paid most recently for each product (for list estimates)."""
+    if not product_ids:
+        return {}
+    rows = db.execute(
+        select(TransactionLineItem.product_id, TransactionLineItem.unit_price)
+        .join(Transaction, Transaction.id == TransactionLineItem.transaction_id)
+        .where(Transaction.user_id == user.id, TransactionLineItem.product_id.in_(product_ids))
+        .ext(distinct_on(TransactionLineItem.product_id))
+        .order_by(
+            TransactionLineItem.product_id,
+            Transaction.occurred_at.desc(),
+            TransactionLineItem.id.desc(),
+        )
+    )
+    return {p: periods.money(price) for p, price in rows}

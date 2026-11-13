@@ -6,6 +6,7 @@
 import { authStorage, supabase } from '../../lib/supabase';
 import { authErrorMessage, NOT_CONFIGURED_ERROR } from './authErrors';
 import type { SignInValues, SignUpValues } from './schemas';
+import { unregisterFromPush } from '../notifications/push';
 
 /** Thrown with a message that is safe to show on screen. */
 export class AuthFailure extends Error {}
@@ -64,6 +65,7 @@ export async function signUp({ fullName, email, password }: SignUpValues): Promi
 /** Always clears the session on this device, even when offline. */
 export async function signOut() {
   if (!supabase) return;
+  await unregisterFromPush(); // while still signed in, so the API knows whose token it is
   try {
     await supabase.auth.signOut({ scope: 'local' });
   } finally {
