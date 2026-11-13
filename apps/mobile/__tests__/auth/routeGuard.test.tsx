@@ -9,6 +9,7 @@ import {
   setFakeSession,
 } from '../../test-utils/fakeSupabase';
 import { mockApi } from '../../test-utils/fakeApi';
+import { PRELOAD_TIMEOUT_MS, preloadRoutes } from '../../test-utils/preloadRoutes';
 
 jest.mock(
   '../../src/lib/supabase',
@@ -18,6 +19,9 @@ jest.mock(
 const appDir = './app';
 
 let fetchMock: jest.SpyInstance;
+
+// Load the route tree once, outside any single test's timeout (see preloadRoutes.ts).
+beforeAll(() => preloadRoutes(), PRELOAD_TIMEOUT_MS);
 
 beforeEach(() => {
   useSessionStore.setState({ status: 'loading', session: null });

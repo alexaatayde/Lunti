@@ -4,6 +4,7 @@ import { queryClient } from '../src/api/queryClient';
 import { useSessionStore } from '../src/stores/session';
 import { mockApi } from '../test-utils/fakeApi';
 import { fakeSession, resetFakeSupabase } from '../test-utils/fakeSupabase';
+import { PRELOAD_TIMEOUT_MS, preloadRoutes } from '../test-utils/preloadRoutes';
 
 jest.mock('../src/lib/supabase', () => require('../test-utils/fakeSupabase').supabaseModuleMock);
 
@@ -11,6 +12,9 @@ jest.mock('../src/lib/supabase', () => require('../test-utils/fakeSupabase').sup
 const appDir = './app';
 
 let api: ReturnType<typeof mockApi>;
+
+// Load the route tree once, outside any single test's timeout (see preloadRoutes.ts).
+beforeAll(() => preloadRoutes(), PRELOAD_TIMEOUT_MS);
 
 describe('navigation (signed in)', () => {
   beforeEach(() => {

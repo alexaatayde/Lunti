@@ -8,6 +8,7 @@ import {
   resetFakeSupabase,
   setFakeSession,
 } from '../../test-utils/fakeSupabase';
+import { PRELOAD_TIMEOUT_MS, preloadRoutes } from '../../test-utils/preloadRoutes';
 
 jest.mock(
   '../../src/lib/supabase',
@@ -18,6 +19,9 @@ const appDir = './app';
 const TERMS = 'I agree to the Terms of Use and Privacy Notice.';
 const DATA_CONSENT =
   'I consent to Lunti processing my receipts and spending data to give me budgets and suggestions, as required by the Data Privacy Act of 2012.';
+
+// Load the route tree once, outside any single test's timeout (see preloadRoutes.ts).
+beforeAll(() => preloadRoutes(), PRELOAD_TIMEOUT_MS);
 
 beforeEach(() => {
   useSessionStore.setState({ status: 'loading', session: null });

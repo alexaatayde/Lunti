@@ -10,6 +10,7 @@ import {
   reply,
 } from '../../test-utils/fakeApi';
 import { fakeSession, resetFakeSupabase } from '../../test-utils/fakeSupabase';
+import { PRELOAD_TIMEOUT_MS, preloadRoutes } from '../../test-utils/preloadRoutes';
 
 jest.mock(
   '../../src/lib/supabase',
@@ -20,6 +21,9 @@ const appDir = './app';
 const SUMMARY = '/api/v1/analytics/summary';
 const PATTERNS = '/api/v1/analytics/patterns';
 let api: ReturnType<typeof mockApi>;
+
+// Load the route tree once, outside any single test's timeout (see preloadRoutes.ts).
+beforeAll(() => preloadRoutes(), PRELOAD_TIMEOUT_MS);
 
 beforeEach(() => {
   useSessionStore.setState({ status: 'loading', session: null });

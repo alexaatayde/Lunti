@@ -12,6 +12,7 @@ import {
   txn,
 } from '../../test-utils/fakeApi';
 import { fakeSession, resetFakeSupabase } from '../../test-utils/fakeSupabase';
+import { PRELOAD_TIMEOUT_MS, preloadRoutes } from '../../test-utils/preloadRoutes';
 
 jest.mock(
   '../../src/lib/supabase',
@@ -23,6 +24,9 @@ jest.mock('@react-native-community/datetimepicker', () => ({
 
 const appDir = './app';
 let api: ReturnType<typeof mockApi>;
+
+// Load the route tree once, outside any single test's timeout (see preloadRoutes.ts).
+beforeAll(() => preloadRoutes(), PRELOAD_TIMEOUT_MS);
 
 beforeEach(() => {
   useSessionStore.setState({ status: 'loading', session: null });
