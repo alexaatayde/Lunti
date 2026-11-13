@@ -1,6 +1,14 @@
 /** Transactions tab (Transactions.html, SRS 3.1.1): search, month + category filters, history. */
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentRef,
+  type ReactNode,
+} from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -8,6 +16,7 @@ import {
   SectionList,
   StyleSheet,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -33,6 +42,7 @@ import {
   TextField,
   TintCard,
 } from '../../../src/components';
+import { revealOffset, type ChipLayout } from '../../../src/features/money/chipScroll';
 import { AddTransactionSheet } from '../../../src/features/money/AddTransactionSheet';
 import { CategoryIcon } from '../../../src/features/money/CategoryIcon';
 import { EmptyState, ErrorState, LoadingBlocks } from '../../../src/features/money/StateViews';
@@ -62,6 +72,80 @@ function useDebounced<T>(value: T, ms = 300): T {
     return () => clearTimeout(timer);
   }, [value, ms]);
   return debounced;
+}
+
+const ALL_CHIP = 'all';
+/** Room left beside a chip scrolled into view, so it doesn't sit flush against the edge. */
+const CHIP_REVEAL_MARGIN = spacing.screen;
+
+type ChipItem = { key: string; chip: ReactNode };
+
+/**
+ * The month chip plus one chip per category, kept so the selected category is visible: one
+ * opened from Analytics may sit past the right edge. Scrolls without animation, and only when
+ * the chip isn't already fully visible, whenever the selection changes or the chip, the row or
+ * its content size is laid out (categories may load before or after the screen opens).
+ */
+function CategoryChips({
+  selected,
+  monthChip,
+  items,
+}: {
+  selected: string | undefined;
+  monthChip: ReactNode;
+  items: ChipItem[];
+}) {
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const layouts = useRef(new Map<string, ChipLayout>());
+  const viewport = useRef({ offset: 0, width: 0 });
+  const selectedKey = selected ?? ALL_CHIP;
+
+  const reveal = useCallback((key: string) => {
+    const chip = layouts.current.get(key);
+    if (!chip) return;
+    const x = revealOffset(chip, viewport.current, CHIP_REVEAL_MARGIN);
+    if (x === null) return;
+    // The offset is only taken from onScroll: Android clamps a scrollTo made before it knows
+    // the content width, and assuming the jump happened would stop the retry below.
+    scrollRef.current?.scrollTo({ x, animated: false });
+  }, []);
+
+  useEffect(() => reveal(selectedKey), [selectedKey, reveal]);
+
+  const onChipLayout = (key: string, e: LayoutChangeEvent) => {
+    const { x, width } = e.nativeEvent.layout;
+    layouts.current.set(key, { x, width });
+    if (key === selectedKey) reveal(key);
+  };
+
+  return (
+    <ScrollView
+      ref={scrollRef}
+      testID="category-chips"
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={styles.chips}
+      style={styles.chipScroll}
+      onLayout={(e) => {
+        viewport.current.width = e.nativeEvent.layout.width;
+        reveal(selectedKey);
+      }}
+      onScroll={(e) => {
+        viewport.current.offset = e.nativeEvent.contentOffset.x;
+      }}
+      // Retry once the content width is known (cached categories can lay out first).
+      onContentSizeChange={() => reveal(selectedKey)}
+      scrollEventThrottle={64}
+    >
+      {monthChip}
+      {items.map(({ key, chip }) => (
+        <View key={key} testID={`chip-${key}`} onLayout={(e) => onChipLayout(key, e)}>
+          {chip}
+        </View>
+      ))}
+    </ScrollView>
+  );
 }
 
 export default function TransactionsScreen() {
@@ -125,30 +209,30 @@ export default function TransactionsScreen() {
         autoCorrect={false}
         height={48}
       />
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.chips}
-        style={styles.chipScroll}
-      >
-        <FilterChip
-          label={monthName}
-          accessibilityLabel={`Month: ${monthName}. Change`}
-          onPress={() => setMonthOpen(true)}
-          leading={<CalendarIcon size={16} color={colors.text} />}
-          trailing={<ChevronDownIcon size={14} color={colors.text} />}
-        />
-        <FilterChip label="All" active={!categoryId} onPress={() => setCategoryId(undefined)} />
-        {(categories.data ?? []).map((c) => (
+      <CategoryChips
+        selected={categoryId}
+        monthChip={
           <FilterChip
-            key={c.id}
-            label={c.name}
-            active={categoryId === c.id}
-            onPress={() => setCategoryId(categoryId === c.id ? undefined : c.id)}
+            label={monthName}
+            accessibilityLabel={`Month: ${monthName}. Change`}
+            onPress={() => setMonthOpen(true)}
+            leading={<CalendarIcon size={16} color={colors.text} />}
+            trailing={<ChevronDownIcon size={14} color={colors.text} />}
           />
-        ))}
-      </ScrollView>
+        }
+        items={[{ id: ALL_CHIP, name: 'All' }, ...(categories.data ?? [])].map((c) => ({
+          key: c.id,
+          chip: (
+            <FilterChip
+              label={c.name}
+              active={c.id === ALL_CHIP ? !categoryId : categoryId === c.id}
+              onPress={() =>
+                setCategoryId(c.id === ALL_CHIP || categoryId === c.id ? undefined : c.id)
+              }
+            />
+          ),
+        }))}
+      />
 
       {summary.data ? (
         <TintCard style={styles.summary}>

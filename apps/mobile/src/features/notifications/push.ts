@@ -2,31 +2,86 @@
  * Push registration (AGENTS.md §2: FCM via the expo-notifications device token). The app sends
  * only its device token to the API; Firebase credentials live on the server.
  *
- * Push needs a development/EAS build with Firebase configured (google-services.json). In Expo
- * Go (Android, SDK 53+) or without permission there is no token: registration is skipped
- * quietly and notifications still appear on the Notifications screen.
+ * Push needs a development/EAS build with Firebase configured (google-services.json). Expo Go
+ * has no FCM push (none at all on Android since SDK 53), and Expo Go 58 lacks native modules
+ * that expo-notifications loads at import time ('ExpoApplication', 'ExpoTopicSubscriptionModule'),
+ * so importing it there crashed the app on launch. The module is therefore loaded lazily and
+ * never in Expo Go. Expo Go is detected with `isRunningInExpoGo()` (its own native module):
+ * Expo Go 58 reports `executionEnvironment: 'bare'`, so expo-constants can't tell. In any other
+ * build a missing native module disables push with a warning instead of crashing. In-app
+ * notifications (the Notifications screen) do not depend on this file.
  */
-import * as Notifications from 'expo-notifications';
+import { isRunningInExpoGo } from 'expo';
 import { router, type Href } from 'expo-router';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
 import { registerDevice, unregisterDevice } from '../../api/hooks';
 
+type NotificationsModule = typeof import('expo-notifications');
+
 // AndroidImportance.HIGH (re-exported through a type module the import linter can't follow).
 const ANDROID_IMPORTANCE_HIGH = 6;
 
+const MISSING_NATIVE_MODULE = /native module/i;
+
 let registeredToken: string | null = null;
+let loaded: { module: NotificationsModule | null } | null = null;
+
+/** Whether this runtime can receive FCM push at all (checked before loading native code). */
+export function pushSupported(): boolean {
+  if (Platform.OS !== 'android' && Platform.OS !== 'ios') return false;
+  return !isRunningInExpoGo();
+}
+
+/**
+ * expo-notifications, or null where push is unsupported or its native code is missing.
+ * Only a missing native module is tolerated; any other error is a real bug and is rethrown.
+ */
+export function loadNotifications(): NotificationsModule | null {
+  if (loaded) return loaded.module;
+  if (!pushSupported()) {
+    loaded = { module: null };
+    return null;
+  }
+  let module: NotificationsModule | undefined;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    module = require('expo-notifications') as NotificationsModule | undefined;
+  } catch (error) {
+    if (!(error instanceof Error) || !MISSING_NATIVE_MODULE.test(error.message)) throw error;
+    return disable(error.message);
+  }
+  // Metro (dev) reports a module that failed to initialise and then hands back nothing.
+  if (typeof module?.getPermissionsAsync !== 'function') return disable('module failed to load');
+  loaded = { module };
+  return module;
+}
+
+/** Warns (so a misconfigured build does not lose push silently) and caches "no push". */
+function disable(reason: string): null {
+  console.warn(`Push notifications disabled: ${reason}`);
+  loaded = { module: null };
+  return null;
+}
+
+/** Test hook: forget the cached module and token. */
+export function resetPushForTests(): void {
+  loaded = null;
+  registeredToken = null;
+}
 
 export async function registerForPush(): Promise<string | null> {
-  if (Platform.OS !== 'android' && Platform.OS !== 'ios') return null;
+  const os = Platform.OS;
+  const Notifications = loadNotifications();
+  if (!Notifications || (os !== 'android' && os !== 'ios')) return null;
   try {
     let permission = await Notifications.getPermissionsAsync();
     if (!permission.granted && permission.canAskAgain) {
       permission = await Notifications.requestPermissionsAsync();
     }
     if (!permission.granted) return null;
-    if (Platform.OS === 'android') {
+    if (os === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'Lunti',
         importance: ANDROID_IMPORTANCE_HIGH,
@@ -35,11 +90,13 @@ export async function registerForPush(): Promise<string | null> {
     const token = await Notifications.getDevicePushTokenAsync();
     const value = typeof token.data === 'string' ? token.data : null;
     if (!value) return null;
-    await registerDevice(value, Platform.OS);
+    await registerDevice(value, os);
     registeredToken = value;
     return value;
-  } catch {
-    return null; // Expo Go, no Firebase config, offline: in-app notifications only
+  } catch (error) {
+    // No Firebase config, offline: in-app notifications only. Say so in development builds.
+    if (__DEV__) console.warn('Push registration skipped:', error);
+    return null;
   }
 }
 
@@ -63,7 +120,8 @@ export function usePushNotifications(signedIn: boolean) {
   }, [signedIn]);
 
   useEffect(() => {
-    if (Platform.OS !== 'android' && Platform.OS !== 'ios') return;
+    const Notifications = loadNotifications();
+    if (!Notifications) return;
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const link = response.notification.request.content.data?.deep_link;
       if (typeof link === 'string' && link.startsWith('/')) router.push(link as Href);

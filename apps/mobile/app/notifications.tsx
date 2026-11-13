@@ -4,7 +4,7 @@
  * be answered here while the suggestion is still open.
  *
  * Added beyond the design (flagged for review): the notification switches at the bottom
- * (user_preferences), since Profile isn't built yet.
+ * (user_preferences). Profile links here instead of repeating them.
  */
 import { router, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
@@ -265,7 +265,11 @@ function PreferencesCard() {
             value={Boolean(data[key])}
             disabled={update.isPending}
             accessibilityLabel={label}
-            trackColor={{ true: colors.primary, false: colors.track }}
+            // Theme colors on both platforms (Android's default thumb is blue). Off and on also
+            // differ by thumb position, so state never depends on color alone.
+            trackColor={{ true: colors.primary, false: colors.textFaint }}
+            thumbColor={colors.surface}
+            ios_backgroundColor={colors.textFaint}
             onValueChange={(value) =>
               update.mutate(
                 { ...data, [key]: value },

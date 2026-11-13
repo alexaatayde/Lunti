@@ -3,6 +3,7 @@ import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-li
 import { queryClient } from '../../src/api/queryClient';
 import { useSessionStore } from '../../src/stores/session';
 import { useToastStore } from '../../src/stores/toast';
+import { colors } from '../../src/theme';
 import { mockApi, notification, problem, reply, suggestion } from '../../test-utils/fakeApi';
 import { fakeSession, resetFakeSupabase } from '../../test-utils/fakeSupabase';
 import { PRELOAD_TIMEOUT_MS, preloadRoutes } from '../../test-utils/preloadRoutes';
@@ -121,6 +122,33 @@ it('switches a reminder type off', async () => {
       notify_budget: true,
     }),
   );
+});
+
+// D2 (emulator validation): Android drew the switch thumbs in its default blue.
+it('draws the reminder switches in theme colors, on and off told apart by more than color', async () => {
+  api.set('GET /api/v1/me/preferences', {
+    notify_budget: true,
+    notify_replenishment: false,
+    notify_shopping: true,
+    notify_meals: true,
+    budget_alert_pct: 90,
+  });
+  await open();
+
+  const on = await screen.findByRole('switch', { name: 'Budget alerts' });
+  const off = screen.getByRole('switch', { name: 'Restock reminders' });
+  for (const s of [on, off]) {
+    expect(s.props).toMatchObject({
+      thumbTintColor: colors.surface,
+      onTintColor: colors.primary,
+      tintColor: colors.textFaint,
+    });
+  }
+  // Screen readers get the state, and the thumb position differs (value), not only the color.
+  expect(on.props.value).toBe(true);
+  expect(off.props.value).toBe(false);
+  expect(on).toBeChecked();
+  expect(off).not.toBeChecked();
 });
 
 it('shows an error with retry', async () => {
