@@ -112,6 +112,9 @@ it('restores with Undo after moving to another tab', async () => {
     merchant: 'Greenfield Market',
     note: null,
   });
+  // The restore carries its own idempotency key (Phase 8B).
+  const key = api.calls('POST', '/api/v1/transactions')[0].headers.get('Idempotency-Key');
+  expect(key).toMatch(/^[0-9a-f-]{36}$/);
   expect(await screen.findByText('Transaction restored. Budget updated.')).toBeOnTheScreen();
 });
 

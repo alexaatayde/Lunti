@@ -5,11 +5,13 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Header, Query, Response, status
 
 from app.core.auth import CurrentUserDep
 from app.core.db import UserDbDep
 from app.core.errors import PROBLEM_JSON, PROBLEM_RESPONSES, Problem
+from app.core.rate_limit import RATE_LIMIT_RESPONSE, rate_limited
+from app.modules.expenses import idempotency
 from app.modules.expenses import transaction_service as service
 from app.modules.expenses.schemas import (
     TransactionCreate,
@@ -82,16 +84,49 @@ def transactions_summary(
     )
 
 
+IdempotencyKeyHeader = Annotated[
+    str | None,
+    Header(
+        alias="Idempotency-Key",
+        pattern=idempotency.KEY_PATTERN,
+        description=(
+            "One id per intended expense (e.g. a UUID), reused for every retry of it. A repeat "
+            "with the same data returns the saved transaction (200, `Idempotent-Replayed: "
+            "true`) instead of recording it twice; the same key with different data is "
+            "rejected (422). Keys are private to each user."
+        ),
+    ),
+]
+
+
 @router.post(
     "",
     response_model=TransactionSaved,
     status_code=status.HTTP_201_CREATED,
-    summary="Record a manual expense (recalculates budgets)",
+    summary="Record a manual expense (recalculates budgets; idempotent with Idempotency-Key)",
+    dependencies=[rate_limited("transactions.create", "rate_limit_transaction_create")],
+    responses={
+        200: {
+            "model": TransactionSaved,
+            "description": "Repeat of an earlier request with this Idempotency-Key: the "
+            "transaction it saved (budget_alerts empty; they were reported the first time).",
+        },
+        409: {**_problem, "description": "The transaction saved with this key was deleted."},
+        **RATE_LIMIT_RESPONSE,
+    },
 )
 def create_transaction(
-    body: TransactionCreate, user: CurrentUserDep, db: UserDbDep
+    body: TransactionCreate,
+    response: Response,
+    user: CurrentUserDep,
+    db: UserDbDep,
+    idempotency_key: IdempotencyKeyHeader = None,
 ) -> TransactionSaved:
-    return service.create_transaction(db, user, body)
+    saved, replayed = service.create_transaction(db, user, body, idempotency_key)
+    if replayed:
+        response.status_code = status.HTTP_200_OK
+        response.headers["Idempotent-Replayed"] = "true"
+    return saved
 
 
 @router.get(

@@ -567,7 +567,7 @@ export interface paths {
         /** List transactions, newest first */
         get: operations["list_transactions"];
         put?: never;
-        /** Record a manual expense (recalculates budgets) */
+        /** Record a manual expense (recalculates budgets; idempotent with Idempotency-Key) */
         post: operations["create_transaction"];
         delete?: never;
         options?: never;
@@ -3558,9 +3558,31 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description The upload is too large. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
             /** @description Validation error. */
             422: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Too many requests; wait `Retry-After` seconds. */
+            429: {
+                headers: {
+                    /** @description Seconds to wait. */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3769,6 +3791,18 @@ export interface operations {
             /** @description Validation error. */
             422: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Too many requests; wait `Retry-After` seconds. */
+            429: {
+                headers: {
+                    /** @description Seconds to wait. */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4525,7 +4559,10 @@ export interface operations {
     create_transaction: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description One id per intended expense (e.g. a UUID), reused for every retry of it. A repeat with the same data returns the saved transaction (200, `Idempotent-Replayed: true`) instead of recording it twice; the same key with different data is rejected (422). Keys are private to each user. */
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4535,6 +4572,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Repeat of an earlier request with this Idempotency-Key: the transaction it saved (budget_alerts empty; they were reported the first time). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionSaved"];
+                };
+            };
             /** @description Successful Response */
             201: {
                 headers: {
@@ -4554,9 +4600,31 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description The transaction saved with this key was deleted. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
             /** @description Validation error. */
             422: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Too many requests; wait `Retry-After` seconds. */
+            429: {
+                headers: {
+                    /** @description Seconds to wait. */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {

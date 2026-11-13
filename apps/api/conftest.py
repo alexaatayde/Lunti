@@ -26,13 +26,14 @@ from sqlalchemy.orm import Session
 
 from alembic import command
 from app.core.auth import TokenVerifier, get_token_verifier
-from app.core.config import to_sqlalchemy_url
+from app.core.config import settings, to_sqlalchemy_url
 from app.core.db import (
     get_session_factory,
     make_engine,
     make_session_factory,
     scope_session_to_user,
 )
+from app.core.rate_limit import RateLimiter, get_rate_limiter
 from app.main import app
 
 API_DIR = Path(__file__).parent
@@ -99,8 +100,28 @@ def verifier(tokens: TokenFactory) -> TokenVerifier:
 
 
 @pytest.fixture
-def client(verifier: TokenVerifier) -> Iterator[TestClient]:
+def rate_limiter() -> RateLimiter:
+    """The limiter `client` uses. Limits are off by default in tests (many build purchase
+    history quickly); rate-limit tests turn them on with `limits_on`."""
+    return RateLimiter()
+
+
+@pytest.fixture
+def limits_on(monkeypatch: pytest.MonkeyPatch, _limits_off_by_default: None) -> None:
+    monkeypatch.setattr(settings, "rate_limit_enabled", True)
+
+
+@pytest.fixture(autouse=True)
+def _limits_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "rate_limit_enabled", False)
+
+
+@pytest.fixture
+def client(verifier: TokenVerifier, rate_limiter: RateLimiter) -> Iterator[TestClient]:
     app.dependency_overrides[get_token_verifier] = lambda: verifier
+    # A fresh rate limiter per test, so counts never carry over between tests.
+    limiter = rate_limiter
+    app.dependency_overrides[get_rate_limiter] = lambda: limiter
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
     app.dependency_overrides.clear()

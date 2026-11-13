@@ -29,6 +29,7 @@ export type ApiErrorKind =
   | 'validation'
   | 'not-found'
   | 'conflict'
+  | 'rate-limited'
   | 'unavailable'
   | 'server';
 
@@ -43,6 +44,7 @@ const MESSAGES: Record<ApiErrorKind, string> = {
   validation: 'Some details need fixing.',
   'not-found': "We couldn't find that.",
   conflict: 'That conflicts with something you already have.',
+  'rate-limited': 'Too many requests. Please wait a moment and try again.',
   unavailable: 'Lunti is temporarily unavailable. Please try again shortly.',
   server: 'Something went wrong. Please try again.',
 };
@@ -53,12 +55,16 @@ export class ApiError extends Error {
     readonly status: number,
     /** The server's RFC 7807 body, when there is one (field errors live in problem.errors). */
     readonly problem?: Problem,
+    /** From `Retry-After` (429/503): seconds the server asked us to wait. */
+    readonly retryAfterSeconds?: number,
   ) {
     // Server details are short, user-facing sentences; fall back to a generic message.
     super(
       kind === 'validation' || kind === 'conflict'
         ? (problem?.detail ?? MESSAGES[kind])
-        : MESSAGES[kind],
+        : kind === 'rate-limited'
+          ? rateLimitedMessage(retryAfterSeconds)
+          : MESSAGES[kind],
     );
     this.name = 'ApiError';
   }
@@ -69,11 +75,29 @@ export class ApiError extends Error {
   }
 }
 
+function rateLimitedMessage(seconds: number | undefined): string {
+  if (!seconds) return MESSAGES['rate-limited'];
+  const wait =
+    seconds < 90 ? `${seconds} second${seconds === 1 ? '' : 's'}` : `${Math.ceil(seconds / 60)} minutes`;
+  return `Too many requests. Please try again in ${wait}.`;
+}
+
+/** `Retry-After` in seconds (the API always sends whole seconds); undefined if absent. */
+export function retryAfter(response: Response): number | undefined {
+  const value = Number(response.headers.get('Retry-After'));
+  return Number.isFinite(value) && value > 0 ? Math.ceil(value) : undefined;
+}
+
+/**
+ * A 429 is not `transient`: nothing retries it automatically (that would only extend the wait);
+ * the user sees how long to wait and tries again.
+ */
 function kindForStatus(status: number): ApiErrorKind {
   if (status === 401) return 'unauthorized';
   if (status === 404) return 'not-found';
   if (status === 409) return 'conflict';
-  if (status === 400 || status === 403 || status === 422) return 'validation';
+  if (status === 429) return 'rate-limited';
+  if (status === 400 || status === 403 || status === 413 || status === 422) return 'validation';
   if (status === 502 || status === 503 || status === 504) return 'unavailable';
   return 'server';
 }
@@ -268,7 +292,7 @@ export async function unwrap<T>(call: () => Promise<FetchResult<T>>): Promise<T>
   const { data, error, response } = result;
   if (response.ok) return data as T;
   const problem = isProblem(error) ? error : undefined;
-  throw new ApiError(kindForStatus(response.status), response.status, problem);
+  throw new ApiError(kindForStatus(response.status), response.status, problem, retryAfter(response));
 }
 
 function isProblem(value: unknown): value is Problem {
@@ -316,5 +340,6 @@ export async function postForm<T>(
     kindForStatus(response.status),
     response.status,
     isProblem(body) ? body : undefined,
+    retryAfter(response),
   );
 }

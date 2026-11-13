@@ -406,6 +406,67 @@ describe('API client', () => {
     expect(isDefinitiveRejection(new TypeError('Network request failed'))).toBe(false);
   });
 
+  describe('rate limits (429)', () => {
+    const limited = (retryAfter?: string) =>
+      new Response(
+        JSON.stringify({
+          type: 'urn:lunti:problem:rate-limited',
+          title: 'Too Many Requests',
+          status: 429,
+          detail: 'Too many requests. Please wait a moment and try again.',
+          errors: [],
+        }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/problem+json',
+            ...(retryAfter ? { 'Retry-After': retryAfter } : {}),
+          },
+        },
+      );
+
+    it('reports how long to wait, is not retried automatically, and never refreshes', async () => {
+      fetchMock.mockResolvedValue(limited('30'));
+
+      const error = await unwrap(() => api.GET('/api/v1/me')).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error).toMatchObject({ kind: 'rate-limited', status: 429, retryAfterSeconds: 30 });
+      expect((error as ApiError).message).toBe('Too many requests. Please try again in 30 seconds.');
+      expect((error as ApiError).transient).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fakeAuth.refreshSession).not.toHaveBeenCalled();
+    });
+
+    it('words long waits in minutes and falls back without Retry-After', async () => {
+      fetchMock.mockResolvedValueOnce(limited('600'));
+      await expect(unwrap(() => api.GET('/api/v1/me'))).rejects.toThrow(
+        'Too many requests. Please try again in 10 minutes.',
+      );
+      fetchMock.mockResolvedValueOnce(limited());
+      await expect(unwrap(() => api.GET('/api/v1/me'))).rejects.toThrow(
+        'Too many requests. Please wait a moment and try again.',
+      );
+    });
+
+    it('applies to receipt uploads too', async () => {
+      fetchMock.mockResolvedValue(limited('12'));
+      await expect(postForm('/api/v1/receipts', () => new FormData())).rejects.toMatchObject({
+        kind: 'rate-limited',
+        retryAfterSeconds: 12,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('treats 413 (too large) as a problem with the request, not a server failure', async () => {
+    fetchMock.mockResolvedValue(problem(413, 'payload-too-large', 'The request is too large.'));
+    await expect(postForm('/api/v1/receipts', () => new FormData())).rejects.toMatchObject({
+      kind: 'validation',
+      status: 413,
+    });
+  });
+
   it('sends no Authorization header when signed out', async () => {
     resetFakeSupabase(null);
     fetchMock.mockResolvedValue(problem(401, 'unauthorized', 'Sign in to continue.'));

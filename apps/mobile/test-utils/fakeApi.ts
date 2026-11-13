@@ -237,7 +237,13 @@ export const problem = (status: number, detail: string, errors: object[] = []) =
 
 export function mockApi(routes: Record<string, Route> = {}) {
   const table: Record<string, Route> = { ...DEFAULTS, ...routes };
-  const sent: { method: string; path: string; query: URLSearchParams; body: unknown }[] = [];
+  const sent: {
+    method: string;
+    path: string;
+    query: URLSearchParams;
+    body: unknown;
+    headers: Headers;
+  }[] = [];
 
   const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     // openapi-fetch passes a Request; multipart uploads pass (url, init).
@@ -252,7 +258,13 @@ export function mockApi(routes: Record<string, Route> = {}) {
         body = text; // multipart uploads (receipt photos)
       }
     }
-    sent.push({ method: request.method, path: url.pathname, query: url.searchParams, body });
+    sent.push({
+      method: request.method,
+      path: url.pathname,
+      query: url.searchParams,
+      body,
+      headers: request.headers,
+    });
 
     const route = table[`${request.method} ${url.pathname}`];
     let result: Reply;

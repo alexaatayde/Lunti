@@ -9,6 +9,7 @@ from app.core.auth import CurrentUserDep
 from app.core.config import settings
 from app.core.db import UserDbDep
 from app.core.errors import PROBLEM_JSON, PROBLEM_RESPONSES, Problem
+from app.core.rate_limit import RATE_LIMIT_RESPONSE, rate_limited
 from app.modules.receipts import service
 from app.modules.receipts.ocr import OcrEngine, get_ocr
 from app.modules.receipts.schemas import Receipt, ReceiptConfirm, ReceiptConfirmed
@@ -29,9 +30,12 @@ StorageDep = Annotated[ReceiptStorage, Depends(get_storage)]
     status_code=status.HTTP_201_CREATED,
     summary="Upload a receipt photo and read it (returns a draft; nothing is saved as a "
     "transaction)",
+    dependencies=[rate_limited("receipts.upload", "rate_limit_receipt_upload")],
     responses={
         200: {"model": Receipt, "description": "This client_id was uploaded before."},
         409: {**_problem, "description": "The client_id is already used."},
+        413: {**_problem, "description": "The upload is too large."},
+        **RATE_LIMIT_RESPONSE,
     },
 )
 def upload_receipt(
@@ -70,9 +74,11 @@ def get_receipt(
     "/{receipt_id}/confirm",
     response_model=ReceiptConfirmed,
     summary="Save the checked receipt as a transaction (recalculates budgets; idempotent)",
+    dependencies=[rate_limited("receipts.confirm", "rate_limit_receipt_confirm")],
     responses={
         **_NOT_FOUND,
         409: {**_problem, "description": "The receipt failed to read or was already deleted."},
+        **RATE_LIMIT_RESPONSE,
     },
 )
 def confirm_receipt(

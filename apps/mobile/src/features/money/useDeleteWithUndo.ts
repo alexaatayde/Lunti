@@ -5,6 +5,7 @@ import {
   useDeleteTransaction,
   type TransactionDetail,
 } from '../../api/hooks';
+import { uuidv4 } from '../../lib/uuid';
 import { showToast } from '../../stores/toast';
 
 export const SAVED_MESSAGE = 'Transaction saved. Budget updated.';
@@ -27,6 +28,8 @@ export function useDeleteWithUndo() {
       // One restore per delete, however many times Undo is pressed (a fast double tap
       // could otherwise fire twice before the toast hides and save the expense twice).
       let undone = false;
+      // The restore is a new expense (the deleted one's key is spent), with its own key.
+      const restoreKey = uuidv4();
       const undo =
         txn.source === 'manual'
           ? () => {
@@ -34,11 +37,14 @@ export function useDeleteWithUndo() {
               undone = true;
               create
                 .mutateAsync({
-                  amount: txn.amount,
-                  category_id: txn.category.id,
-                  occurred_at: txn.occurred_at,
-                  merchant: txn.merchant,
-                  note: txn.note,
+                  body: {
+                    amount: txn.amount,
+                    category_id: txn.category.id,
+                    occurred_at: txn.occurred_at,
+                    merchant: txn.merchant,
+                    note: txn.note,
+                  },
+                  idempotencyKey: restoreKey,
                 })
                 .then(
                   () => showToast('Transaction restored. Budget updated.'),

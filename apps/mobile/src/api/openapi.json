@@ -5514,6 +5514,17 @@
             },
             "description": "The client_id is already used."
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "The upload is too large."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -5524,6 +5535,25 @@
               "application/problem+json": {}
             },
             "description": "Validation error."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Too many requests; wait `Retry-After` seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
           },
           "503": {
             "content": {
@@ -5793,6 +5823,25 @@
               "application/problem+json": {}
             },
             "description": "Validation error."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Too many requests; wait `Retry-After` seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
           },
           "503": {
             "content": {
@@ -6872,6 +6921,27 @@
       },
       "post": {
         "operationId": "create_transaction",
+        "parameters": [
+          {
+            "description": "One id per intended expense (e.g. a UUID), reused for every retry of it. A repeat with the same data returns the saved transaction (200, `Idempotent-Replayed: true`) instead of recording it twice; the same key with different data is rejected (422). Keys are private to each user.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Za-z0-9_-]{8,128}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One id per intended expense (e.g. a UUID), reused for every retry of it. A repeat with the same data returns the saved transaction (200, `Idempotent-Replayed: true`) instead of recording it twice; the same key with different data is rejected (422). Keys are private to each user.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -6883,6 +6953,16 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionSaved"
+                }
+              }
+            },
+            "description": "Repeat of an earlier request with this Idempotency-Key: the transaction it saved (budget_alerts empty; they were reported the first time)."
+          },
           "201": {
             "content": {
               "application/json": {
@@ -6904,6 +6984,17 @@
             },
             "description": "Missing, invalid or expired access token."
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "The transaction saved with this key was deleted."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -6914,6 +7005,25 @@
               "application/problem+json": {}
             },
             "description": "Validation error."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Too many requests; wait `Retry-After` seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
           },
           "503": {
             "content": {
@@ -6932,7 +7042,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Record a manual expense (recalculates budgets)",
+        "summary": "Record a manual expense (recalculates budgets; idempotent with Idempotency-Key)",
         "tags": [
           "transactions"
         ]

@@ -2,7 +2,13 @@
 
 from app.core.db import Base
 from app.modules.analytics.models import Product, PurchasePattern
-from app.modules.expenses.models import Budget, Category, Transaction, TransactionLineItem
+from app.modules.expenses.models import (
+    Budget,
+    Category,
+    IdempotencyKey,
+    Transaction,
+    TransactionLineItem,
+)
 from app.modules.insights.models import Insight
 from app.modules.meals.models import IngredientInventory, Recipe, RecipeIngredient
 from app.modules.notifications.models import DeviceToken, Notification
@@ -21,6 +27,7 @@ __all__ = [
     "Category",
     "DeviceToken",
     "Feedback",
+    "IdempotencyKey",
     "IngredientInventory",
     "Insight",
     "Notification",

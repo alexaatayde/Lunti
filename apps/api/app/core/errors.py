@@ -117,7 +117,9 @@ async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResp
 
 
 async def _http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:
-    slug = {404: "not-found", 405: "method-not-allowed"}.get(exc.status_code, "http-error")
+    slug = {404: "not-found", 405: "method-not-allowed", 413: "payload-too-large"}.get(
+        exc.status_code, "http-error"
+    )
     detail = exc.detail if isinstance(exc.detail, str) else None
     return problem_response(exc.status_code, slug, detail, headers=exc.headers)
 
@@ -132,8 +134,17 @@ async def _database_unavailable(_: Request, exc: OperationalError) -> JSONRespon
     )
 
 
-async def _unexpected(_: Request, exc: Exception) -> JSONResponse:
-    logger.exception("Unhandled error", exc_info=exc)
+async def _unexpected(request: Request, exc: Exception) -> JSONResponse:
+    # The route template (never the raw URL or query); in production the log formatter keeps
+    # only the exception type and code locations (app/core/logging.py).
+    route = getattr(request.scope.get("route"), "path", "(unmatched)")
+    logger.error(
+        "Unhandled error in %s %s: %s",
+        request.method,
+        route,
+        type(exc).__qualname__,
+        exc_info=exc,
+    )
     return problem_response(500, "internal-error", "Something went wrong. Please try again.")
 
 

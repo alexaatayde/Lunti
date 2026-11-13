@@ -1,4 +1,5 @@
-"""Expenses module tables: categories, transactions, transaction_line_items, budgets."""
+"""Expenses module tables: categories, transactions, transaction_line_items, budgets,
+idempotency_keys."""
 
 import uuid
 from datetime import date, datetime
@@ -154,4 +155,33 @@ class Budget(IdMixin, TimestampMixin, Base):
     )
     last_alert_level: Mapped[str] = mapped_column(
         Text, server_default=text("'none'"), nullable=False
+    )
+
+
+class IdempotencyKey(IdMixin, TimestampMixin, Base):
+    """A client-chosen key for one intended write (Phase 8B). A retried request with the same
+    key returns the transaction the first one produced instead of recording it twice.
+
+    `request_hash` (SHA-256 of the normalized request) detects a key reused for different
+    data. `transaction_id` becomes NULL when that transaction is deleted, so a late retry of
+    the original request can't bring it back.
+    """
+
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (
+        CheckConstraint("scope in ('transactions.create')", name="scope"),
+        CheckConstraint("key ~ '^[A-Za-z0-9_-]{8,128}$'", name="key_format"),
+        CheckConstraint("request_hash ~ '^[0-9a-f]{64}$'", name="request_hash_format"),
+        Index("uq_idempotency_keys_user_id_scope_key", "user_id", "scope", "key", unique=True),
+        Index("ix_idempotency_keys_created_at", "created_at"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), auth_user_fk(), nullable=False
+    )
+    scope: Mapped[str] = mapped_column(Text, nullable=False)
+    key: Mapped[str] = mapped_column(Text, nullable=False)
+    request_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    transaction_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("transactions.id", ondelete="SET NULL"), index=True
     )

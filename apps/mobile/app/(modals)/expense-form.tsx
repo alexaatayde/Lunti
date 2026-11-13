@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApiError } from '../../src/api/client';
 import {
+  KEY_REUSED,
   useCategories,
   useCreateTransaction,
   useTransaction,
@@ -51,6 +52,7 @@ import {
   useDeleteWithUndo,
 } from '../../src/features/money/useDeleteWithUndo';
 import { formatMoney, toAmountString } from '../../src/lib/money';
+import { uuidv4 } from '../../src/lib/uuid';
 import { formatRelativeDay, formatTime } from '../../src/lib/dates';
 import { showToast } from '../../src/stores/toast';
 import { colors, font, radius, spacing } from '../../src/theme';
@@ -153,6 +155,10 @@ function ExpenseForm({ existing }: { existing?: TransactionDetail }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // One idempotency key per new expense, kept across every Save attempt while this form is
+  // open: if a save timed out after the server recorded it, saving again returns that
+  // transaction instead of a duplicate (Phase 8B).
+  const [createKey, setCreateKey] = useState(uuidv4);
   // A scanned total is the sum of its items; it changes when the items change (step 4).
   const amountLocked = existing?.source === 'receipt' && existing.item_count > 0;
 
@@ -199,11 +205,14 @@ function ExpenseForm({ existing }: { existing?: TransactionDetail }) {
         const saved = await update.mutateAsync(amountLocked ? rest : { amount, ...rest });
         showToast(savedMessage(saved));
       } else {
-        const saved = await create.mutateAsync(body);
+        const saved = await create.mutateAsync({ body, idempotencyKey: createKey });
         showToast(savedMessage(saved));
       }
       close();
     } catch (error) {
+      // An earlier attempt was saved with different details. The message says so; saving
+      // again after that is a deliberate new expense, so it gets a new key.
+      if (error instanceof ApiError && error.problem?.type === KEY_REUSED) setCreateKey(uuidv4());
       const fieldErrors = error instanceof ApiError ? (error.problem?.errors ?? []) : [];
       let placed = false;
       for (const fe of fieldErrors) {

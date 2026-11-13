@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import CurrentUser
 from app.core.errors import ApiError, invalid_field, not_found
 from app.modules.analytics import patterns
-from app.modules.expenses import budget_service, periods, purchase_history
+from app.modules.expenses import budget_service, idempotency, periods, purchase_history
 from app.modules.expenses.models import Category, Transaction, TransactionLineItem
 from app.modules.expenses.schemas import (
     CategoryRef,
@@ -268,7 +268,21 @@ def _require_category(db: Session, user: CurrentUser, category_id: UUID) -> Cate
     return category
 
 
-def create_transaction(db: Session, user: CurrentUser, data: TransactionCreate) -> TransactionSaved:
+def create_transaction(
+    db: Session,
+    user: CurrentUser,
+    data: TransactionCreate,
+    idempotency_key: str | None = None,
+) -> tuple[TransactionSaved, bool]:
+    """Returns (saved, replayed). With an idempotency key, a repeat of a request that already
+    succeeded returns that transaction (replayed=True) without recording it again, so budget
+    recalculation, alerts and purchase effects happen once (see idempotency.py)."""
+    claim = None
+    if idempotency_key is not None:
+        claim = idempotency.claim(db, user, idempotency.CREATE_TRANSACTION, idempotency_key, data)
+        if claim.replay_transaction_id is not None:
+            return saved_for(db, user, claim.replay_transaction_id), True
+
     category = _require_category(db, user, data.category_id)
     row = Transaction(
         user_id=user.id,
@@ -281,10 +295,22 @@ def create_transaction(db: Session, user: CurrentUser, data: TransactionCreate) 
     )
     db.add(row)
     db.flush()
+    if claim is not None:
+        idempotency.complete(db, claim, row.id)
     alerts = budget_service.recalculate(db, user, {category.id})
     notifications.budget_alerts(db, user, alerts)
     db.refresh(row)
-    return TransactionSaved(**_to_out(row, category, 0).model_dump(), budget_alerts=alerts)
+    return TransactionSaved(**_to_out(row, category, 0).model_dump(), budget_alerts=alerts), False
+
+
+def saved_for(db: Session, user: CurrentUser, transaction_id: UUID) -> TransactionSaved:
+    """A stored transaction in the create response shape. Alerts were reported (and
+    notified) when it was first saved, so a replay carries none."""
+    row = _get_own(db, user, transaction_id)
+    count = _item_counts(db, [row.id]).get(row.id, 0)
+    return TransactionSaved(
+        **_to_out(row, _category(db, row), count).model_dump(), budget_alerts=[]
+    )
 
 
 def update_transaction(

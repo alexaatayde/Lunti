@@ -22,6 +22,7 @@ USER_TABLES = {
     "categories",
     "device_tokens",
     "feedback",
+    "idempotency_keys",
     "ingredient_inventory",
     "insights",
     "notifications",
@@ -71,6 +72,12 @@ def _populate(admin_engine: Engine, user_id: uuid.UUID) -> None:
             " unit_price, line_total) values (:t, :p, 'Rice', 1, 10, 10) returning id",
             t=txn,
             p=product,
+        )
+        one(
+            "insert into idempotency_keys (user_id, scope, key, request_hash, transaction_id)"
+            " values (:u, 'transactions.create', :k, repeat('a', 64), :t) returning id",
+            k=f"key-{user_id}",
+            t=txn,
         )
         one(
             "insert into budgets (user_id, category_id, period_type, start_date, limit_amount)"

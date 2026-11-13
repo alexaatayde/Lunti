@@ -2,7 +2,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { File } from 'expo-file-system';
 
-import { api, postForm, unwrap } from './client';
+import { api, ApiError, postForm, unwrap } from './client';
 import type { components } from './schema';
 
 export type Me = components['schemas']['Me'];
@@ -151,12 +151,46 @@ export function useTransaction(id: string | undefined) {
   });
 }
 
+/** Problem type when an Idempotency-Key was already used for a different expense. */
+export const KEY_REUSED = 'urn:lunti:problem:idempotency-key-reused';
+
+export type CreateTransactionInput = {
+  body: TransactionCreate;
+  /**
+   * One key per intended expense (a form, an Undo), reused for every attempt to save it. If a
+   * save times out after the server recorded it, sending it again with the same key returns
+   * that transaction instead of recording a second one. Never generate it inside a retry.
+   */
+  idempotencyKey: string;
+};
+
+/**
+ * Not retried automatically: a failed save shows its error and the user taps Save again, which
+ * reuses the same key, so a save that did reach the server is never doubled.
+ */
 export function useCreateTransaction() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: TransactionCreate) =>
-      unwrap(() => api.POST('/api/v1/transactions', { body })),
+    mutationFn: ({ body, idempotencyKey }: CreateTransactionInput) => {
+      // The API still accepts a create without a key (older clients); this app never sends one.
+      if (!idempotencyKey) throw new Error('A transaction needs an idempotency key.');
+      return unwrap(() =>
+        api.POST('/api/v1/transactions', {
+          body,
+          params: { header: { 'Idempotency-Key': idempotencyKey } },
+        }),
+      );
+    },
     onSuccess: () => invalidateMoney(client),
+    onError: (error) => {
+      // An earlier attempt was saved (or saved and deleted): show the list as it really is.
+      if (
+        error instanceof ApiError &&
+        (error.problem?.type === KEY_REUSED || error.kind === 'conflict')
+      ) {
+        void invalidateMoney(client);
+      }
+    },
   });
 }
 

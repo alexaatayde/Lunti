@@ -59,6 +59,7 @@ export function useHardwareBack(onBack: (() => void) | null) {
 
 export function uploadMessage(error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.status === 413) return 'This photo is too large. Try another one.';
     if (error.kind === 'validation') {
       return error.problem?.errors?.[0]?.message ?? "This photo can't be used. Try another one.";
     }

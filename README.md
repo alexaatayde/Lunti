@@ -241,6 +241,43 @@ All figures are SQL sums of the user's transactions; dates are local to Asia/Man
   user-set date is within `PANTRY_EXPIRING_DAYS` (3), and a meal idea when the best recipe
   matches at least `MEAL_IDEA_MIN_MATCH_PCT` (80 %).
 
+### API security (Phase 8B)
+
+- **Idempotent expense saves.** `POST /api/v1/transactions` takes an `Idempotency-Key` header
+  (8–128 of `A-Z a-z 0-9 _ -`). The app sends one key per intended expense and reuses it for
+  every attempt, so a save that timed out after the server recorded it is never doubled: a
+  repeat with the same data returns the saved transaction (200, `Idempotent-Replayed: true`,
+  no new budget alerts); the same key with different data gets 422
+  (`idempotency-key-reused`); a retry after that transaction was deleted gets 409. Keys are
+  per user (table `idempotency_keys`, migration 0004, RLS). The header is optional on the
+  server for now (older clients); the app always sends it.
+  **Key retention: keys are kept (no pruning) until a retention policy is approved.** Each row
+  holds only the user, scope, key, a SHA-256 of the request and the transaction link; rows go
+  with the account (ON DELETE CASCADE) and are RLS-protected. Pruning too early is unsafe:
+  once a key is gone, a delayed retry of its request (a phone that was offline, a request
+  queued by the OS, a slow network replaying it) is treated as new, so it records the expense
+  again — and if the user had deleted that expense, it quietly comes back, since the key's
+  "deleted" marker (`transaction_id` NULL → 409) is what blocks it. Any future retention
+  period must be far longer than any client could retry, and the app must never reuse a key
+  after that period.
+- **Rate limits** (429 + `Retry-After`) per signed-in user and endpoint: receipt upload, receipt
+  confirm and transaction create (`RATE_LIMIT_*` in `.env.example`).
+  **Deployment requirement: run ONE API process** (one uvicorn worker, one instance). Counts
+  are kept in that process's memory: with several workers or instances each keeps its own
+  counts (the effective limit multiplies), and a restart resets them. Scaling out needs a
+  shared store (e.g. a Postgres table or Redis) first. The scheduler has the same
+  one-process assumption (its jobs are also guarded by advisory locks).
+- **Body size**: requests over `REQUEST_MAX_BYTES` (receipt photos: `RECEIPT_MAX_BYTES` + 64 KB)
+  get 413 before they are read in full.
+- **Logs**: one access line per request (method, route template, status, duration, request id;
+  `X-Request-ID` is returned). No query strings, headers, tokens or bodies; secrets, e-mail
+  addresses and URL queries are masked in every line. `APP_ENV=production` logs JSON and drops
+  exception messages from tracebacks; SQL parameter values are hidden unless
+  `LOG_SQL_PARAMETERS=true`.
+- **API docs** (`/docs`, `/redoc`, `/openapi.json`) are served only outside production. The
+  mobile client is generated from `app.openapi()` (`python -m scripts.export_openapi`), which
+  works in every environment.
+
 ### Mobile API client
 
 After changing an endpoint: `python -m scripts.export_openapi` (apps/api), then

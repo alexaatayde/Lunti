@@ -78,6 +78,8 @@ def make_engine(url: str) -> Engine:
         # stale connection in the pool). `ping_on_checkout` below replaces it.
         pool_pre_ping=False,
         pool_recycle=settings.db_pool_recycle_seconds,
+        # Keep amounts, names and notes out of database error messages (and so out of logs).
+        hide_parameters=not settings.log_sql_parameters,
         connect_args={
             # Safe behind Supabase's transaction pooler, which can't keep prepared statements.
             "prepare_threshold": None,

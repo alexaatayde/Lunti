@@ -87,6 +87,26 @@ class Settings(BaseSettings):
     fcm_credentials: str = ""
     tz: str = "Asia/Manila"
 
+    # Per-user rate limits (Phase 8B; app/core/rate_limit.py). "N/unit" windows separated by
+    # commas (units: second, minute, hour, day); empty = no limit for that endpoint. Counts are
+    # kept per API process.
+    rate_limit_enabled: bool = True
+    rate_limit_receipt_upload: str = "10/minute,50/day"  # each new upload may call Vision OCR
+    rate_limit_receipt_confirm: str = "30/minute"
+    rate_limit_transaction_create: str = "30/minute,500/day"
+
+    # Request bodies larger than this are refused with 413 before they are read in full.
+    # Receipt uploads may be RECEIPT_MAX_BYTES plus this much (form fields, multipart framing).
+    request_max_bytes: int = Field(default=1024 * 1024, ge=1024)
+
+    # Logging (Phase 8B; app/core/logging.py). LOG_FORMAT "json" or "text"; empty = json in
+    # production, text otherwise. SQL parameter values (amounts, notes, names) stay out of
+    # error messages unless LOG_SQL_PARAMETERS=true — keep it off with real data, which local
+    # development against Supabase also uses.
+    log_level: str = "INFO"
+    log_format: str = ""
+    log_sql_parameters: bool = False
+
     @cached_property
     def supabase_issuer(self) -> str:
         return f"{self.supabase_url.rstrip('/')}/auth/v1"
@@ -94,6 +114,10 @@ class Settings(BaseSettings):
     @cached_property
     def supabase_jwks_url(self) -> str:
         return f"{self.supabase_issuer}/.well-known/jwks.json"
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env.strip().lower() == "production"
 
     @cached_property
     def sqlalchemy_database_url(self) -> str:
