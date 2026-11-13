@@ -139,6 +139,63 @@ export function notification(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+export function pantryItem(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'pi-1',
+    product_id: 'p-eggs',
+    name: 'Eggs',
+    quantity: '12.000',
+    unit: 'pcs',
+    estimated_expiry: null,
+    days_left: null,
+    confirmed: false,
+    state: 'in_stock',
+    updated_at: '2026-11-13T01:00:00Z',
+    ...overrides,
+  };
+}
+
+export function pantryPage(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    items: [],
+    use_first: [],
+    in_stock_count: 0,
+    use_soon_count: 0,
+    depleted_count: 0,
+    estimated_count: 0,
+    ...overrides,
+  };
+}
+
+export function ingredient(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    name: 'eggs',
+    quantity: '4.000',
+    unit: 'pcs',
+    status: 'available',
+    pantry_item_name: 'Eggs',
+    est_price: null,
+    ...overrides,
+  };
+}
+
+export function recipe(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'r-1',
+    name: 'Scrambled eggs with tomatoes',
+    servings: 2,
+    prep_time_minutes: 10,
+    match_pct: 66,
+    available_count: 1,
+    check_amount_count: 1,
+    total_count: 3,
+    missing: [ingredient({ name: 'onion', quantity: '1.000', status: 'missing', pantry_item_name: null, est_price: '10.00' })],
+    missing_cost: '10.00',
+    missing_unpriced_count: 0,
+    ...overrides,
+  };
+}
+
 const DEFAULTS: Record<string, unknown> = {
   'GET /api/v1/analytics/summary': analyticsSummary(),
   'GET /api/v1/analytics/patterns': [],
@@ -146,6 +203,9 @@ const DEFAULTS: Record<string, unknown> = {
   'GET /api/v1/shopping-lists': [shoppingList()],
   'GET /api/v1/notifications': { items: [], unread_count: 0 },
   'GET /api/v1/replenishment/muted': [],
+  'GET /api/v1/pantry': pantryPage(),
+  'GET /api/v1/recipes/recommendations': { items: [], budget_label: null, budget_remaining: null, over_budget_count: 0 },
+  'GET /api/v1/insights': { items: [], need_more_data: true, placeholder: 'Add a few weeks of purchases.' },
   'GET /api/v1/me': ME,
   'GET /api/v1/me/preferences': {
     notify_budget: true,

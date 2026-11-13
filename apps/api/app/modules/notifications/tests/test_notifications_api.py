@@ -247,7 +247,8 @@ def test_daily_job_creates_reminders_once_and_respects_preferences(
 
     sender = FakeSender()
     counts = run_daily(factory, today(), sender)
-    assert counts["reminders"] == 2 and counts["failed_users"] == 0
+    # The job covers every user in the shared test database; this user's two are checked below.
+    assert counts["reminders"] >= 2 and counts["failed_users"] == 0
     assert run_daily(factory, today(), sender)["reminders"] == 0  # repeated run: no duplicates
 
     items = page(db_client, headers)["items"]
@@ -308,3 +309,67 @@ def test_mute_then_unmute_does_not_repeat_the_reminder(
     restock = [n for n in page(db_client, headers)["items"] if n["type"] == "replenishment"]
     assert len(restock) == 1  # same suggestion, same key: no second reminder
     assert restock[0]["suggestion"]["status"] == "pending"  # and it can be answered again
+
+
+@pytest.mark.usefixtures("fakes")
+def test_daily_job_sends_pantry_and_meal_reminders_once(
+    db_client: TestClient, user, factory
+) -> None:
+    from app.modules.meals.tests.test_meals_api import confirm
+
+    headers, cats, _ = user
+    confirm(
+        db_client,
+        headers,
+        cats,
+        [
+            ("Eggs", "12", "8.00", "pcs"),
+            ("Tomato", "4", "12.00", "pcs"),
+            ("Onion", "2", "10.00", "pcs"),
+        ],
+    )  # noqa: E501
+    eggs = next(
+        i
+        for i in db_client.get("/api/v1/pantry", headers=headers).json()["items"]
+        if i["name"] == "Eggs"
+    )  # noqa: E501
+    db_client.patch(
+        f"/api/v1/pantry/{eggs['id']}",
+        headers=headers,
+        json={"estimated_expiry": today().isoformat()},
+    )  # noqa: E501
+
+    run_daily(factory, today(), FakeSender())
+    run_daily(factory, today(), FakeSender())
+    meals = [
+        n
+        for n in page(db_client, headers)["items"]
+        if n["title"] in ("Use these first", "Meal idea for tonight")
+    ]  # noqa: E501
+    assert sorted(n["title"] for n in meals) == ["Meal idea for tonight", "Use these first"]
+    by_title = {n["title"]: n for n in meals}
+    assert by_title["Use these first"]["body"] == "Eggs is near the best-before date you set."
+    assert (
+        by_title["Meal idea for tonight"]["body"]
+        == "You have 3 of 3 ingredients for Scrambled eggs with tomatoes."
+    )  # noqa: E501
+
+
+@pytest.mark.usefixtures("fakes")
+def test_meal_reminders_respect_the_meals_preference(db_client: TestClient, user, factory) -> None:
+    from app.modules.meals.tests.test_meals_api import confirm
+
+    headers, cats, _ = user
+    set_prefs(db_client, headers, notify_meals=False)
+    confirm(
+        db_client,
+        headers,
+        cats,
+        [
+            ("Eggs", "12", "8.00", "pcs"),
+            ("Tomato", "4", "12.00", "pcs"),
+            ("Onion", "2", "10.00", "pcs"),
+        ],
+    )  # noqa: E501
+    run_daily(factory, today(), FakeSender())
+    assert [n for n in page(db_client, headers)["items"] if n["type"] == "meals"] == []

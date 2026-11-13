@@ -13,6 +13,8 @@ from app.modules.analytics.router import router as analytics_router
 from app.modules.expenses.budgets_router import router as budgets_router
 from app.modules.expenses.router import router as categories_router
 from app.modules.expenses.transactions_router import router as transactions_router
+from app.modules.insights.router import router as insights_router
+from app.modules.meals.router import admin_router, pantry_router, recipes_router
 from app.modules.notifications.router import devices_router, notifications_router
 from app.modules.receipts.router import router as receipts_router
 from app.modules.replenishment.router import replenishment_router, shopping_router
@@ -37,7 +39,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="Lunti API",
-    version="0.6.0",
+    version="0.7.0",
     generate_unique_id_function=_operation_id,
     lifespan=lifespan,
 )
@@ -55,6 +57,10 @@ api_v1.include_router(replenishment_router)
 api_v1.include_router(shopping_router)
 api_v1.include_router(notifications_router)
 api_v1.include_router(devices_router)
+api_v1.include_router(pantry_router)
+api_v1.include_router(recipes_router)
+api_v1.include_router(insights_router)
+api_v1.include_router(admin_router)
 app.include_router(api_v1)
 
 

@@ -188,6 +188,34 @@ def add_suggested(
     return _item_out(item)
 
 
+def add_from_recipe(
+    db: Session,
+    user: CurrentUser,
+    *,
+    name: str,
+    recipe_id: UUID,
+    est_price: Decimal | None,
+) -> tuple[ItemOut, bool]:
+    """For "Add missing to list": one purchase of the ingredient (source "recipe").
+    Returns (item, created); an unbought item with the same name is reused."""
+    row = default_list(db, user, lock=True)
+    existing = _open_duplicate(db, row.id, name, None)
+    if existing is not None:
+        return _item_out(existing), False
+    item = ShoppingListItem(
+        shopping_list_id=row.id,
+        name=name[:120],
+        quantity=Decimal(1),
+        est_price=est_price,
+        source="recipe",
+        recipe_id=recipe_id,
+    )
+    db.add(item)
+    db.flush()
+    db.refresh(item)
+    return _item_out(item), True
+
+
 def _own_item(db: Session, user: CurrentUser, list_id: UUID, item_id: UUID) -> ShoppingListItem:
     row = _own_list(db, user, list_id, lock=True)
     item = db.scalar(

@@ -51,7 +51,7 @@ describe('navigation (signed in)', () => {
   it.each([
     ['/analytics', 'Analytics'],
     ['/budget', 'Budgets'],
-    ['/meals', 'Meals'],
+    ['/meals', 'Ideas & savings'],
     ['/meals/pantry', 'Pantry'],
     ['/meals/grocery-list', 'Grocery list'],
     ['/budget/new', 'New budget'],

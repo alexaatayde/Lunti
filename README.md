@@ -212,6 +212,35 @@ All figures are SQL sums of the user's transactions; dates are local to Asia/Man
 3. Backend: Project settings → Service accounts → generate a private key, store it outside the
    repo, set `FCM_CREDENTIALS=/absolute/path/firebase-key.json` in `apps/api/.env`.
 
+### Pantry, recipes and insights
+
+- **Pantry** (`/pantry`): confirmed receipt items in a *Groceries* transaction add their
+  quantity as an **estimate**; no automatic decrease; deleting that receipt takes it back off
+  unconfirmed items. Setting an amount (−/+ or edit) confirms it. Expiry is only user-set.
+- **Recipes** (`/recipes/recommendations`, `/recipes/{id}`, `/recipes/{id}/add-missing`):
+  match = available ÷ required ingredients (names matched word by word; g↔kg and ml↔L
+  converted; an amount that can't be compared counts as available but is flagged "check
+  amount"). Missing-item cost = what the user last paid, otherwise unknown. Recipes whose known
+  missing cost exceeds the Groceries budget left are hidden (and counted).
+- **Catalog**: migration `0003_recipe_catalog` seeds 20 Filipino home recipes (data only).
+  Admins (`profiles.role = 'admin'`) add more with `POST /api/v1/admin/recipes`.
+  Review, then apply from `apps/api` (needs approval for the live database):
+
+  ```bash
+  .venv/bin/alembic -x url=postgresql://offline/x upgrade 0002_replenishment_notifications:head --sql
+  .venv/bin/alembic upgrade head
+  ```
+
+- **Insights** (`/insights`): figures come from the analytics and budget services. With
+  `OPENAI_API_KEY` and `OPENAI_MODEL` set, OpenAI words them (only the figures are sent; custom
+  category names are replaced) and any reply containing a number not in the figures is
+  discarded for the template. Without them, a fixed template writes the same figures
+  ("Summary"). Fewer than `INSIGHTS_MIN_TRANSACTIONS` (5) this + last month → "need more data".
+  At most one generation per user per day.
+- **Daily job** additions (behind `notify_meals`): "Use these first" for pantry items whose
+  user-set date is within `PANTRY_EXPIRING_DAYS` (3), and a meal idea when the best recipe
+  matches at least `MEAL_IDEA_MIN_MATCH_PCT` (80 %).
+
 ### Mobile API client
 
 After changing an endpoint: `python -m scripts.export_openapi` (apps/api), then

@@ -97,6 +97,9 @@ export function invalidateMoney(client: ReturnType<typeof useQueryClient>) {
       ['replenishment'],
       ['shopping-list'],
       ['notifications'],
+      ['pantry'],
+      ['recipes'],
+      ['insights'],
     ].map((queryKey) =>
       client.invalidateQueries({ queryKey }),
     ),
@@ -481,4 +484,93 @@ export function unregisterDevice(fcmToken: string) {
   return unwrap(() =>
     api.DELETE('/api/v1/devices/{fcm_token}', { params: { path: { fcm_token: fcmToken } } }),
   );
+}
+
+// ---------- pantry, recipes, insights (build step 7) ----------
+
+export type PantryPage = components['schemas']['PantryPage'];
+export type PantryItem = components['schemas']['PantryItem'];
+export type PantryUpdate = components['schemas']['PantryUpdate'];
+export type Recommendations = components['schemas']['Recommendations'];
+export type RecipeSummary = components['schemas']['RecipeSummary'];
+export type RecipeDetail = components['schemas']['RecipeDetail'];
+export type Ingredient = components['schemas']['IngredientOut'];
+export type InsightsPage = components['schemas']['InsightsPage'];
+export type Insight = components['schemas']['InsightOut'];
+
+export const step7Keys = {
+  pantry: ['pantry'] as const,
+  recommendations: ['recipes', 'recommendations'] as const,
+  recipe: (id: string) => ['recipes', 'detail', id] as const,
+  insights: ['insights'] as const,
+};
+
+export function usePantry() {
+  return useQuery({
+    queryKey: step7Keys.pantry,
+    queryFn: () => unwrap(() => api.GET('/api/v1/pantry')),
+  });
+}
+
+/** Pantry amounts drive recipe matches, so both refresh after a change. */
+export function useUpdatePantryItem() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: PantryUpdate }) =>
+      unwrap(() =>
+        api.PATCH('/api/v1/pantry/{item_id}', { params: { path: { item_id: id } }, body }),
+      ),
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: step7Keys.pantry }),
+        client.invalidateQueries({ queryKey: ['recipes'] }),
+      ]),
+  });
+}
+
+export function useRecommendations() {
+  return useQuery({
+    queryKey: step7Keys.recommendations,
+    queryFn: () => unwrap(() => api.GET('/api/v1/recipes/recommendations')),
+  });
+}
+
+export function useRecipe(id: string | undefined) {
+  return useQuery({
+    queryKey: step7Keys.recipe(id ?? ''),
+    enabled: !!id,
+    queryFn: () =>
+      unwrap(() => api.GET('/api/v1/recipes/{recipe_id}', { params: { path: { recipe_id: id ?? '' } } })),
+  });
+}
+
+export function useAddMissingToList() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (recipeId: string) =>
+      unwrap(() =>
+        api.POST('/api/v1/recipes/{recipe_id}/add-missing', {
+          params: { path: { recipe_id: recipeId } },
+        }),
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: step6Keys.shoppingList }),
+  });
+}
+
+export function useInsights() {
+  return useQuery({
+    queryKey: step7Keys.insights,
+    queryFn: () => unwrap(() => api.GET('/api/v1/insights')),
+  });
+}
+
+export function useDismissInsight() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(() =>
+        api.POST('/api/v1/insights/{insight_id}/dismiss', { params: { path: { insight_id: id } } }),
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: step7Keys.insights }),
+  });
 }

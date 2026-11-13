@@ -32,6 +32,7 @@ from app.modules.expenses.schemas import (
     TransactionUpdate,
 )
 from app.modules.expenses.schemas import Transaction as TransactionOut
+from app.modules.meals import pantry
 from app.modules.notifications import service as notifications
 from app.modules.replenishment import service as replenishment
 
@@ -330,10 +331,12 @@ def delete_transaction(db: Session, user: CurrentUser, transaction_id: UUID) -> 
     row = _get_own(db, user, transaction_id)
     category_id = row.category_id
     products = purchase_history.products_in_transaction(db, user, row.id)
+    food = purchase_history.food_lines(db, user, row.id)
     db.delete(row)  # line items cascade
     db.flush()
     budget_service.recalculate(db, user, {category_id})
     refresh_purchases(db, user, products)
+    pantry.remove_purchase(db, user, food)  # estimates only; confirmed amounts stay
 
 
 def refresh_purchases(db: Session, user: CurrentUser, product_ids: set[UUID]) -> None:
@@ -403,6 +406,7 @@ def create_from_receipt(
     db.flush()
     alerts = budget_service.recalculate(db, user, {category.id})
     notifications.budget_alerts(db, user, alerts)
+    pantry.add_purchase(db, user, purchase_history.food_lines(db, user, row.id))  # §7.5
     db.refresh(row)
     return TransactionSaved(**_to_out(row, category, len(lines)).model_dump(), budget_alerts=alerts)
 

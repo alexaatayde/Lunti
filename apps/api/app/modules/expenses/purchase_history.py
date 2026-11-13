@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import CurrentUser
 from app.modules.expenses import periods
-from app.modules.expenses.models import Transaction, TransactionLineItem
+from app.modules.expenses.models import Category, Transaction, TransactionLineItem
 
 
 @dataclass(frozen=True)
@@ -123,3 +123,29 @@ def last_unit_prices(db: Session, user: CurrentUser, product_ids: set[UUID]) -> 
         )
     )
     return {p: periods.money(price) for p, price in rows}
+
+
+@dataclass(frozen=True)
+class FoodLine:
+    product_id: UUID
+    quantity: Decimal
+    unit: str | None
+
+
+def food_lines(db: Session, user: CurrentUser, transaction_id: UUID) -> list[FoodLine]:
+    """Line items of a Groceries-category transaction (the pantry's source, AGENTS.md §7.5).
+    Other categories (household, dining…) never reach the pantry."""
+    rows = db.execute(
+        select(
+            TransactionLineItem.product_id, TransactionLineItem.quantity, TransactionLineItem.unit
+        )
+        .join(Transaction, Transaction.id == TransactionLineItem.transaction_id)
+        .join(Category, Category.id == Transaction.category_id)
+        .where(
+            Transaction.user_id == user.id,
+            Transaction.id == transaction_id,
+            Category.icon == "groceries",
+            TransactionLineItem.product_id.is_not(None),
+        )
+    )
+    return [FoodLine(product_id=p, quantity=q, unit=u) for p, q, u in rows]

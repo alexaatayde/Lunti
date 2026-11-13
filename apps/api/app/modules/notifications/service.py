@@ -18,8 +18,10 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.core.auth import CurrentUser
+from app.core.config import settings
 from app.core.errors import not_found
 from app.modules.expenses.schemas import BudgetAlert
+from app.modules.meals import pantry, recipes
 from app.modules.notifications.models import DeviceToken, Notification
 from app.modules.notifications.schemas import NotificationOut, NotificationPage
 from app.modules.replenishment import algorithm, shopping
@@ -30,6 +32,7 @@ PREFERENCE = {
     "budget": "notify_budget",
     "replenishment": "notify_replenishment",
     "shopping": "notify_shopping",
+    "meals": "notify_meals",  # pantry "use soon" nudges and meal ideas
 }
 PAGE_SIZE = 50
 
@@ -137,7 +140,50 @@ def daily_reminders(db: Session, user: CurrentUser, today: date) -> int:
             dedupe_key=f"shopping:{today.isoformat()}",
         ):
             created += 1
+    created += _meal_reminders(db, user, today)
     db.flush()
+    return created
+
+
+def _meal_reminders(db: Session, user: CurrentUser, today: date) -> int:
+    """Pantry items the user dated that are best used soon, and one meal idea (§7.6)."""
+    if not wants(db, user.id, "meals"):
+        return 0
+    created = 0
+    soon = pantry.expiring(db, user, today)
+    if soon:
+        first = soon[0].name
+        others = len(soon) - 1
+        body = (
+            f"{first} and {others} more item{'s' if others != 1 else ''} are near the "
+            "best-before date you set."
+            if others
+            else f"{first} is near the best-before date you set."
+        )
+        if create(
+            db,
+            user.id,
+            kind="meals",
+            title="Use these first",
+            body=body,
+            deep_link="/meals/pantry",
+            dedupe_key=f"pantry:{today.isoformat()}",
+        ):
+            created += 1
+    best = recipes.best_match(db, user)
+    if best is not None and best.match_pct >= settings.meal_idea_min_match_pct:
+        have = best.available_count + best.check_amount_count
+        if create(
+            db,
+            user.id,
+            kind="meals",
+            title="Meal idea for tonight",
+            body=f"You have {have} of {best.total_count} ingredients for {best.name}.",
+            deep_link=f"/meals/recipe/{best.id}",
+            payload={"recipe_id": str(best.id)},
+            dedupe_key=f"meal:{today.isoformat()}",
+        ):
+            created += 1
     return created
 
 

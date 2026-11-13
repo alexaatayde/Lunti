@@ -54,6 +54,16 @@ class Settings(BaseSettings):
     replenishment_window_days: int = 3
     still_have_min_days: int = 3
 
+    # Pantry and meals (AGENTS.md §7.5; decisions approved 2026-11-13).
+    pantry_expiring_days: int = 3  # "use soon" when the user-set expiry is this close
+    meal_idea_min_match_pct: int = 80  # daily meal idea only for a recipe this well matched
+    recommendations_limit: int = 10
+
+    # AI insights (AGENTS.md §7.7). Without OPENAI_API_KEY the same figures are written by a
+    # fixed template (labelled "summary", never "AI").
+    insights_min_transactions: int = 5  # in the current + previous month
+    openai_timeout_seconds: float = 20.0
+
     # Scheduled jobs (AGENTS.md §7.6) run inside the API process. Off unless enabled, so
     # tests and one-off scripts never start background threads.
     scheduler_enabled: bool = False

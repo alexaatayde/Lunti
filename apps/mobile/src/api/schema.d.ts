@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/v1/admin/recipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a catalog recipe (admins only) */
+        post: operations["create_recipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analytics/patterns": {
         parameters: {
             query?: never;
@@ -162,6 +179,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/insights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Today's insights (or a 'need more data' placeholder) */
+        get: operations["list_insights"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/insights/{insight_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hide an insight */
+        post: operations["dismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -249,6 +300,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pantry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your estimated pantry */
+        get: operations["list_pantry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pantry/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Adjust or confirm an item (any amount you set counts as confirmed) */
+        patch: operations["update_pantry_item"];
+        trace?: never;
+    };
     "/api/v1/receipts": {
         parameters: {
             query?: never;
@@ -295,6 +380,57 @@ export interface paths {
         put?: never;
         /** Save the checked receipt as a transaction (recalculates budgets; idempotent) */
         post: operations["confirm_receipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recipes ranked by how much of them your pantry covers */
+        get: operations["recommendations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/{recipe_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A recipe with each ingredient's availability */
+        get: operations["get_recipe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes/{recipe_id}/add-missing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add the recipe's missing ingredients to your grocery list */
+        post: operations["add_missing"];
         delete?: never;
         options?: never;
         head?: never;
@@ -516,6 +652,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AddMissingResult */
+        AddMissingResult: {
+            /** Added */
+            added: components["schemas"]["ShoppingListItem"][];
+            /** Already On List */
+            already_on_list: string[];
+        };
         /**
          * AnalyticsSummary
          * @description Spending for the current period so far, compared with the same span of the previous
@@ -896,6 +1039,77 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** IngredientIn */
+        IngredientIn: {
+            /** Name */
+            name: string;
+            /** Quantity */
+            quantity: number | string;
+            /** Unit */
+            unit?: string | null;
+        };
+        /** IngredientOut */
+        IngredientOut: {
+            /**
+             * Est Price
+             * @description Missing only: what you last paid for one purchase of it (null = unknown).
+             */
+            est_price: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Pantry Item Name
+             * @description The pantry item it matched.
+             */
+            pantry_item_name: string | null;
+            /** Quantity */
+            quantity: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "available" | "check_amount" | "missing";
+            /** Unit */
+            unit: string | null;
+        };
+        /** InsightOut */
+        InsightOut: {
+            /**
+             * Engine
+             * @description "ai" = worded by the model (numbers checked); "summary" = fixed template.
+             * @enum {string}
+             */
+            engine: "ai" | "summary";
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Message */
+            message: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "spending" | "budget";
+        };
+        /** InsightsPage */
+        InsightsPage: {
+            /** Items */
+            items: components["schemas"]["InsightOut"][];
+            /**
+             * Need More Data
+             * @description Too little data for insights yet.
+             */
+            need_more_data: boolean;
+            /** Placeholder */
+            placeholder: string | null;
+        };
         /** ItemCreate */
         ItemCreate: {
             /** Est Price */
@@ -1059,6 +1273,79 @@ export interface components {
             items: components["schemas"]["NotificationOut"][];
             /** Unread Count */
             unread_count: number;
+        };
+        /** PantryItem */
+        PantryItem: {
+            /**
+             * Confirmed
+             * @description False = an estimate from purchases.
+             */
+            confirmed: boolean;
+            /** Days Left */
+            days_left: number | null;
+            /**
+             * Estimated Expiry
+             * @description Only ever set by the user.
+             */
+            estimated_expiry: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Product Id
+             * Format: uuid
+             */
+            product_id: string;
+            /**
+             * Quantity
+             * @description Estimated unless `confirmed`.
+             */
+            quantity: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "in_stock" | "use_soon" | "depleted";
+            /** Unit */
+            unit: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** PantryPage */
+        PantryPage: {
+            /** Depleted Count */
+            depleted_count: number;
+            /** Estimated Count */
+            estimated_count: number;
+            /** In Stock Count */
+            in_stock_count: number;
+            /** Items */
+            items: components["schemas"]["PantryItem"][];
+            /** Use First */
+            use_first: components["schemas"]["PantryItem"][];
+            /** Use Soon Count */
+            use_soon_count: number;
+        };
+        /** PantryUpdate */
+        PantryUpdate: {
+            /**
+             * Confirmed
+             * @description true = confirm the amount as it is.
+             */
+            confirmed?: boolean | null;
+            /** Estimated Expiry */
+            estimated_expiry?: string | null;
+            /** Quantity */
+            quantity?: number | string | null;
+            /** Unit */
+            unit?: string | null;
         };
         /**
          * Preferences
@@ -1272,6 +1559,101 @@ export interface components {
             total: string | null;
             /** Vat */
             vat: string | null;
+        };
+        /** RecipeCreate */
+        RecipeCreate: {
+            /** Ingredients */
+            ingredients: components["schemas"]["IngredientIn"][];
+            /** Name */
+            name: string;
+            /** Prep Time Minutes */
+            prep_time_minutes: number;
+            /** Servings */
+            servings: number;
+        };
+        /** RecipeDetail */
+        RecipeDetail: {
+            /** Available Count */
+            available_count: number;
+            /** Check Amount Count */
+            check_amount_count: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ingredients */
+            ingredients: components["schemas"]["IngredientOut"][];
+            /**
+             * Match Pct
+             * @description Available ÷ required ingredients, whole percent.
+             */
+            match_pct: number;
+            /** Missing */
+            missing: components["schemas"]["IngredientOut"][];
+            /**
+             * Missing Cost
+             * @description Sum of KNOWN prices of missing ingredients; see missing_unpriced_count.
+             */
+            missing_cost: string;
+            /** Missing Unpriced Count */
+            missing_unpriced_count: number;
+            /** Name */
+            name: string;
+            /** Prep Time Minutes */
+            prep_time_minutes: number;
+            /** Servings */
+            servings: number;
+            /** Total Count */
+            total_count: number;
+        };
+        /** RecipeSummary */
+        RecipeSummary: {
+            /** Available Count */
+            available_count: number;
+            /** Check Amount Count */
+            check_amount_count: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Match Pct
+             * @description Available ÷ required ingredients, whole percent.
+             */
+            match_pct: number;
+            /** Missing */
+            missing: components["schemas"]["IngredientOut"][];
+            /**
+             * Missing Cost
+             * @description Sum of KNOWN prices of missing ingredients; see missing_unpriced_count.
+             */
+            missing_cost: string;
+            /** Missing Unpriced Count */
+            missing_unpriced_count: number;
+            /** Name */
+            name: string;
+            /** Prep Time Minutes */
+            prep_time_minutes: number;
+            /** Servings */
+            servings: number;
+            /** Total Count */
+            total_count: number;
+        };
+        /** Recommendations */
+        Recommendations: {
+            /** Budget Label */
+            budget_label: string | null;
+            /** Budget Remaining */
+            budget_remaining: string | null;
+            /** Items */
+            items: components["schemas"]["RecipeSummary"][];
+            /**
+             * Over Budget Count
+             * @description Recipes left out because the KNOWN estimated cost of their missing ingredients is more than the food budget has left (unknown prices aren't counted).
+             */
+            over_budget_count: number;
         };
         /**
          * ReviewFlag
@@ -1614,6 +1996,70 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    create_recipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeDetail"];
+                };
+            };
+            /** @description Missing, invalid or expired access token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Admins only. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Service temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
     analytics_patterns: {
         parameters: {
             query?: never;
@@ -2460,6 +2906,118 @@ export interface operations {
             };
         };
     };
+    list_insights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightsPage"];
+                };
+            };
+            /** @description Missing, invalid or expired access token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Service temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    dismiss: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                insight_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightOut"];
+                };
+            };
+            /** @description Missing, invalid or expired access token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Service temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
     get_me: {
         parameters: {
             query?: never;
@@ -2830,6 +3388,122 @@ export interface operations {
             };
         };
     };
+    list_pantry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PantryPage"];
+                };
+            };
+            /** @description Missing, invalid or expired access token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Service temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    update_pantry_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PantryUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PantryItem"];
+                };
+            };
+            /** @description Missing, invalid or expired access token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Pantry item not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Service temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
     upload_receipt: {
         parameters: {
             query?: never;
@@ -3081,6 +3755,180 @@ export interface operations {
             };
             /** @description The receipt failed to read or was already deleted. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Service temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    recommendations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recommendations"];
+                };
+            };
+            /** @description Missing, invalid or expired access token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Service temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    get_recipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeDetail"];
+                };
+            };
+            /** @description Missing, invalid or expired access token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Recipe not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Service temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    add_missing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddMissingResult"];
+                };
+            };
+            /** @description Missing, invalid or expired access token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Recipe not found. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
