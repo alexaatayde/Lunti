@@ -603,7 +603,10 @@ export interface paths {
         get: operations["get_transaction"];
         put?: never;
         post?: never;
-        /** Delete a transaction (recalculates budgets) */
+        /**
+         * Delete a transaction (recalculates budgets)
+         * @description A scanned transaction also deletes its receipt; the receipt photo is removed from storage after the deletion is saved.
+         */
         delete: operations["delete_transaction"];
         options?: never;
         head?: never;

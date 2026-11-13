@@ -7,6 +7,7 @@ transaction is reported as "not found".
 
 import base64
 import binascii
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -34,6 +35,7 @@ from app.modules.expenses.schemas import (
 from app.modules.expenses.schemas import Transaction as TransactionOut
 from app.modules.meals import pantry
 from app.modules.notifications import service as notifications
+from app.modules.receipts.storage import ReceiptStorage
 from app.modules.replenishment import service as replenishment
 
 DEFAULT_PAGE_SIZE = 30
@@ -327,9 +329,18 @@ def _has_items(db: Session, transaction_id: UUID) -> bool:
     )
 
 
-def delete_transaction(db: Session, user: CurrentUser, transaction_id: UUID) -> None:
+def delete_transaction(
+    db: Session,
+    user: CurrentUser,
+    transaction_id: UUID,
+    receipt_storage: Callable[[], ReceiptStorage] | None = None,
+) -> None:
+    """A scanned transaction takes its receipt row with it, in this database transaction;
+    the photo is deleted after commit (receipts.cleanup). `receipt_storage` is only called
+    when there is a receipt, so manual deletes never depend on storage."""
     row = _get_own(db, user, transaction_id)
     category_id = row.category_id
+    receipt_id = row.receipt_id
     products = purchase_history.products_in_transaction(db, user, row.id)
     food = purchase_history.food_lines(db, user, row.id)
     db.delete(row)  # line items cascade
@@ -337,6 +348,12 @@ def delete_transaction(db: Session, user: CurrentUser, transaction_id: UUID) -> 
     budget_service.recalculate(db, user, {category_id})
     refresh_purchases(db, user, products)
     pantry.remove_purchase(db, user, food)  # estimates only; confirmed amounts stay
+    if receipt_id is not None:
+        # Imported here: the receipts module imports this one.
+        from app.modules.receipts import cleanup as receipt_cleanup
+        from app.modules.receipts.storage import get_storage
+
+        receipt_cleanup.delete_for_transaction(db, user, receipt_id, receipt_storage or get_storage)
 
 
 def refresh_purchases(db: Session, user: CurrentUser, product_ids: set[UUID]) -> None:

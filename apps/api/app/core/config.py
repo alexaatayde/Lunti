@@ -1,5 +1,6 @@
 from functools import cached_property
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -39,6 +40,13 @@ class Settings(BaseSettings):
     # files under RECEIPT_LOCAL_DIR, never for real user data).
     receipt_storage: str = "supabase"
     receipt_local_dir: str = "var/receipts"
+    # Receipt cleanup (app/jobs/receipt_cleanup.py), provisional values approved 2026-11-13.
+    # Photos no receipt references are deleted after this long (protects uploads in flight).
+    receipt_orphan_grace_hours: int = Field(default=24, ge=1)
+    # Receipts never confirmed (processing, draft, failed) are deleted after this many days.
+    receipt_draft_retention_days: int = Field(default=7, ge=1)
+    # Hour (Asia/Manila) for the daily receipt cleanup when the scheduler is on.
+    receipt_cleanup_hour: int = Field(default=3, ge=0, le=23)
     # "google" (default; needs GOOGLE_APPLICATION_CREDENTIALS) or "fixture" (development
     # only: returns the stored text of known synthetic receipt images in OCR_FIXTURE_DIR).
     ocr_provider: str = "google"

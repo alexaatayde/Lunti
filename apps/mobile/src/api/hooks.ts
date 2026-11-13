@@ -86,7 +86,18 @@ export const moneyKeys = {
  * After any transaction or budget change, everything that shows money is refetched
  * (AGENTS.md §8: transactions, budgets, analytics, patterns).
  */
-export function invalidateMoney(client: ReturnType<typeof useQueryClient>) {
+export function invalidateMoney(
+  client: ReturnType<typeof useQueryClient>,
+  options: { except?: readonly unknown[] } = {},
+) {
+  const { except } = options;
+  const kept = except
+    ? (query: { queryKey: readonly unknown[] }) =>
+        !(
+          query.queryKey.length === except.length &&
+          query.queryKey.every((part, i) => part === except[i])
+        )
+    : undefined;
   return Promise.all(
     // Purchases also move restock suggestions, the list's budget check and budget alerts.
     [
@@ -100,9 +111,7 @@ export function invalidateMoney(client: ReturnType<typeof useQueryClient>) {
       ['pantry'],
       ['recipes'],
       ['insights'],
-    ].map((queryKey) =>
-      client.invalidateQueries({ queryKey }),
-    ),
+    ].map((queryKey) => client.invalidateQueries({ queryKey, predicate: kept })),
   );
 }
 
@@ -174,9 +183,14 @@ export function useDeleteTransaction() {
           params: { path: { transaction_id: id } },
         }),
       ),
+    // The deleted transaction's own query is left alone: its screen is still open (closing
+    // its dialog) when this runs. Removing or refetching it there would GET a 404 and swap the
+    // screen to a loading state, unmounting the open dialog — which on Android leaves the
+    // dialog's invisible window on top, swallowing every touch (the Undo toast included).
+    // With no screen left watching it, the cache drops it on its own. The refetches run in
+    // the background (not awaited), so the dialog closes as soon as the DELETE succeeds.
     onSuccess: (_data, id) => {
-      client.removeQueries({ queryKey: moneyKeys.transaction(id) });
-      return invalidateMoney(client);
+      void invalidateMoney(client, { except: moneyKeys.transaction(id) });
     },
   });
 }

@@ -1,10 +1,11 @@
 """`/transactions` (AGENTS.md §9, SRS 3.1.1)."""
 
+from collections.abc import Callable
 from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.core.auth import CurrentUserDep
 from app.core.db import UserDbDep
@@ -18,6 +19,7 @@ from app.modules.expenses.schemas import (
     TransactionSummary,
     TransactionUpdate,
 )
+from app.modules.receipts.storage import ReceiptStorage, storage_provider
 
 router = APIRouter(prefix="/transactions", tags=["transactions"], responses=PROBLEM_RESPONSES)
 
@@ -121,8 +123,17 @@ def update_transaction(
     "/{transaction_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a transaction (recalculates budgets)",
+    description=(
+        "A scanned transaction also deletes its receipt; the receipt photo is removed from "
+        "storage after the deletion is saved."
+    ),
     responses=_NOT_FOUND,
 )
-def delete_transaction(transaction_id: UUID, user: CurrentUserDep, db: UserDbDep) -> Response:
-    service.delete_transaction(db, user, transaction_id)
+def delete_transaction(
+    transaction_id: UUID,
+    user: CurrentUserDep,
+    db: UserDbDep,
+    receipt_storage: Annotated[Callable[[], ReceiptStorage], Depends(storage_provider)],
+) -> Response:
+    service.delete_transaction(db, user, transaction_id, receipt_storage)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

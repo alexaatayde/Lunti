@@ -2,6 +2,7 @@
 
 - daily at DAILY_JOB_HOUR:00 Asia/Manila: replenishment refresh + restock/shopping reminders.
 - every minute: push stored notifications that haven't been sent (budget alerts etc.).
+- daily at RECEIPT_CLEANUP_HOUR:00: abandoned receipt drafts and orphaned photos (D5).
 With several API processes each would schedule the jobs; the advisory lock and SKIP LOCKED
 keep the work single (see daily.py, notifications/dispatch.py).
 """
@@ -38,6 +39,17 @@ def _dispatch() -> None:
         logger.exception("Notification dispatch failed")
 
 
+def _receipt_cleanup() -> None:
+    from app.core.db import get_session_factory
+    from app.jobs.receipt_cleanup import run_receipt_cleanup
+    from app.modules.receipts.storage import get_storage
+
+    try:
+        run_receipt_cleanup(get_session_factory(), get_storage)
+    except Exception:
+        logger.exception("Receipt cleanup failed")
+
+
 def start_scheduler() -> BackgroundScheduler | None:
     if not settings.scheduler_enabled:
         return None
@@ -48,6 +60,14 @@ def start_scheduler() -> BackgroundScheduler | None:
     common = {"coalesce": True, "max_instances": 1, "misfire_grace_time": 3600}
     scheduler.add_job(_daily, "cron", hour=settings.daily_job_hour, minute=0, id="daily", **common)
     scheduler.add_job(_dispatch, "interval", minutes=1, id="dispatch", **common)
+    scheduler.add_job(
+        _receipt_cleanup,
+        "cron",
+        hour=settings.receipt_cleanup_hour,
+        minute=0,
+        id="receipt_cleanup",
+        **common,
+    )
     scheduler.start()
     logger.info("Scheduler started (daily at %02d:00 %s)", settings.daily_job_hour, settings.tz)
     return scheduler

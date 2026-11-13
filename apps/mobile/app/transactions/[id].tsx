@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTransaction, type BudgetImpact } from '../../src/api/hooks';
+import { useTransaction, type BudgetImpact, type TransactionDetail } from '../../src/api/hooks';
 import {
   AlertDialog,
   AppText,
@@ -45,18 +45,19 @@ export default function TransactionDetailScreen() {
   const insets = useSafeAreaInsets();
   const txn = useTransaction(id);
   const deletion = useDeleteWithUndo();
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  // What the delete dialog shows. A snapshot, so the dialog never depends on the query.
+  const [toDelete, setToDelete] = useState<TransactionDetail | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const onDelete = async () => {
-    if (!txn.data) return;
+    if (!toDelete) return;
     setDeleteError(null);
     try {
-      await deletion.run(txn.data);
-      setConfirmDelete(false);
+      await deletion.run(toDelete);
+      setToDelete(null);
       back();
     } catch (error) {
-      setConfirmDelete(false);
+      setToDelete(null);
       setDeleteError(error instanceof Error ? error.message : String(error));
     }
   };
@@ -162,11 +163,11 @@ export default function TransactionDetailScreen() {
             {budget ? <BudgetImpactCard impact={budget} /> : null}
 
             {deleteError ? (
-              <ErrorState message={deleteError} onRetry={() => setConfirmDelete(true)} />
+              <ErrorState message={deleteError} onRetry={() => setToDelete(txn.data)} />
             ) : null}
 
             <Pressable
-              onPress={() => setConfirmDelete(true)}
+              onPress={() => setToDelete(txn.data)}
               accessibilityRole="button"
               accessibilityLabel="Delete transaction"
               style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
@@ -175,36 +176,49 @@ export default function TransactionDetailScreen() {
               <AppText style={styles.deleteText}>Delete transaction</AppText>
             </Pressable>
 
-            <AlertDialog
-              visible={confirmDelete}
-              title="Delete this transaction?"
-              summary={{
-                label: txn.data.merchant ?? txn.data.category.name,
-                value: formatMoney(txn.data.amount),
-              }}
-              message={
-                budget ? (
-                  <>
-                    It will be removed from your history, and your {budget.label} budget goes
-                    back up to{' '}
-                    <AppText variant="meta" style={styles.strong}>
-                      {formatMoney(budget.remaining_without_this)}
-                    </AppText>{' '}
-                    left.
-                  </>
-                ) : (
-                  'It will be removed from your history.'
-                )
-              }
-              confirmLabel="Delete"
-              cancelLabel="Keep it"
-              onConfirm={onDelete}
-              onCancel={() => setConfirmDelete(false)}
-              loading={deletion.isPending}
-            />
           </>
         )}
       </ScrollView>
+
+      {/* Outside the loading/error/data branches on purpose: it is only ever closed through
+          `visible`, never unmounted while open. On Android an unmounted open Modal can leave
+          its invisible window on top, swallowing every touch. */}
+      <AlertDialog
+        visible={toDelete !== null}
+        title="Delete this transaction?"
+        summary={
+          toDelete
+            ? {
+                label: toDelete.merchant ?? toDelete.category.name,
+                value: formatMoney(toDelete.amount),
+              }
+            : undefined
+        }
+        message={
+          <>
+            {toDelete?.budgets[0] ? (
+              <>
+                It will be removed from your history, and your {toDelete.budgets[0].label}{' '}
+                budget goes back up to{' '}
+                <AppText variant="meta" style={styles.strong}>
+                  {formatMoney(toDelete.budgets[0].remaining_without_this)}
+                </AppText>{' '}
+                left.
+              </>
+            ) : (
+              'It will be removed from your history.'
+            )}
+            {toDelete?.source === 'receipt'
+              ? ' The scanned receipt and its photo are deleted too.'
+              : ''}
+          </>
+        }
+        confirmLabel="Delete"
+        cancelLabel="Keep it"
+        onConfirm={onDelete}
+        onCancel={() => setToDelete(null)}
+        loading={deletion.isPending}
+      />
 
       <BottomNav
         active="transactions"

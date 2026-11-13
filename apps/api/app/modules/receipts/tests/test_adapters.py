@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace as NS
@@ -22,7 +23,12 @@ from app.modules.receipts.ocr import (
     rows_from_words,
 )
 from app.modules.receipts.service import allocate_discount, sniff_image
-from app.modules.receipts.storage import LocalStorage, StorageUnavailable, SupabaseStorage
+from app.modules.receipts.storage import (
+    LocalStorage,
+    StorageUnavailable,
+    StoredObject,
+    SupabaseStorage,
+)
 
 FIXTURES = Path(__file__).resolve().parents[4] / "tests" / "fixtures" / "receipts"
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 20
@@ -198,6 +204,44 @@ def test_local_storage_never_overwrites_or_escapes(tmp_path: Path) -> None:
     storage.delete("user/a.png")
     storage.delete("user/a.png")  # already gone: fine
     assert storage.signed_url("user/a.png") is None
+
+
+def test_supabase_lists_files_one_folder_deep_with_server_timestamps() -> None:
+    user = "11111111-1111-4111-8111-111111111111"
+    pages: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/storage/v1/object/list/receipts"
+        body = json.loads(request.content)
+        pages.append(body)
+        if body["prefix"] == "":
+            return httpx.Response(200, json=[{"name": user, "id": None}, {"name": "", "id": None}])
+        files = [
+            {"name": f"r{i}.jpg", "id": f"id{i}", "created_at": "2026-11-10T01:02:03.000Z"}
+            for i in range(body["offset"], min(body["offset"] + body["limit"], 130))
+        ]
+        return httpx.Response(200, json=files)
+
+    found = list(_supabase(handler).list_objects())
+
+    assert len(found) == 130  # two pages of the user's folder
+    assert found[0] == StoredObject(f"{user}/r0.jpg", datetime(2026, 11, 10, 1, 2, 3, tzinfo=UTC))
+    assert [p["offset"] for p in pages if p["prefix"] == user] == [0, 100]
+
+
+def test_supabase_listing_outage_raises_unavailable() -> None:
+    with pytest.raises(StorageUnavailable):
+        list(_supabase(lambda request: httpx.Response(503)).list_objects())
+
+
+def test_local_storage_lists_its_files(tmp_path: Path) -> None:
+    storage = LocalStorage(tmp_path)
+    storage.put("user/a.png", PNG, "image/png")
+    (tmp_path / "stray.txt").write_text("not in a user folder")
+    found = list(storage.list_objects())
+    assert [o.path for o in found] == ["user/a.png"]
+    assert found[0].created_at.tzinfo is UTC
+    assert list(LocalStorage(tmp_path / "missing").list_objects()) == []
 
 
 # ---------- image checks ----------

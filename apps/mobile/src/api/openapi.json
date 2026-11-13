@@ -7076,6 +7076,7 @@
     },
     "/api/v1/transactions/{transaction_id}": {
       "delete": {
+        "description": "A scanned transaction also deletes its receipt; the receipt photo is removed from storage after the deletion is saved.",
         "operationId": "delete_transaction",
         "parameters": [
           {

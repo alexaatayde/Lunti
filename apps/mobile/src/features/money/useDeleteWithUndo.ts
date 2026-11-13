@@ -24,9 +24,14 @@ export function useDeleteWithUndo() {
       await remove.mutateAsync(txn.id);
       // The screen that deleted has usually closed by the time Undo is tapped, so this uses
       // the mutation's promise (per-call callbacks don't run after the screen unmounts).
+      // One restore per delete, however many times Undo is pressed (a fast double tap
+      // could otherwise fire twice before the toast hides and save the expense twice).
+      let undone = false;
       const undo =
         txn.source === 'manual'
           ? () => {
+              if (undone) return;
+              undone = true;
               create
                 .mutateAsync({
                   amount: txn.amount,
