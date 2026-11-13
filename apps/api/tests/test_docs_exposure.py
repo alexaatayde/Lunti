@@ -5,6 +5,7 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.auth import TokenVerifier, get_token_verifier
 from app.core.config import settings
 from app.main import app, create_app, docs_urls
 from scripts.export_openapi import render
@@ -13,9 +14,14 @@ DOC_PATHS = ("/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect")
 
 
 @pytest.fixture
-def production_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+def production_client(
+    monkeypatch: pytest.MonkeyPatch, verifier: TokenVerifier
+) -> Iterator[TestClient]:
     monkeypatch.setattr(settings, "app_env", "production")
-    with TestClient(create_app(), raise_server_exceptions=False) as client:
+    production = create_app()
+    # Same test key set as the `client` fixture: no dependency on a local .env (CI has none).
+    production.dependency_overrides[get_token_verifier] = lambda: verifier
+    with TestClient(production, raise_server_exceptions=False) as client:
         yield client
     monkeypatch.setattr(settings, "app_env", "development")
     create_app()  # restore development logging configuration
