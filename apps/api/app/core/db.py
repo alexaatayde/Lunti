@@ -14,8 +14,10 @@ from datetime import datetime
 from functools import lru_cache
 from typing import Annotated
 
+import psycopg
 from fastapi import Depends
-from sqlalchemy import DateTime, Engine, MetaData, create_engine, func, text
+from psycopg.pq import TransactionStatus
+from sqlalchemy import DateTime, Engine, MetaData, create_engine, event, exc, func, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
@@ -64,14 +66,60 @@ def get_engine() -> Engine:
 
 
 def make_engine(url: str) -> Engine:
-    return create_engine(
+    engine = create_engine(
         url,
         pool_size=settings.db_pool_size,
         max_overflow=settings.db_max_overflow,
-        pool_pre_ping=True,
-        # Safe behind Supabase's transaction pooler, which can't keep prepared statements.
-        connect_args={"prepare_threshold": None},
+        # Not SQLAlchemy's pool_pre_ping: its psycopg ping switches autocommit back in a
+        # `finally`, and on a socket that died mid-ping (e.g. "Can't assign requested address"
+        # after sleep or a network change) psycopg still reports the query as ACTIVE, so that
+        # raises "can't change 'autocommit' now". That ProgrammingError hides the disconnect,
+        # the stale connection isn't discarded, and the request fails with a 500 (one per
+        # stale connection in the pool). `ping_on_checkout` below replaces it.
+        pool_pre_ping=False,
+        pool_recycle=settings.db_pool_recycle_seconds,
+        connect_args={
+            # Safe behind Supabase's transaction pooler, which can't keep prepared statements.
+            "prepare_threshold": None,
+            "connect_timeout": settings.db_connect_timeout_seconds,
+            # TCP keepalives let the OS notice a dead idle connection, so the checkout ping
+            # fails fast instead of waiting minutes for a TCP timeout.
+            "keepalives": 1,
+            "keepalives_idle": settings.db_keepalive_idle_seconds,
+            "keepalives_interval": 10,
+            "keepalives_count": 3,
+        },
     )
+    event.listen(engine, "checkout", ping_on_checkout)
+    return engine
+
+
+def ping_on_checkout(dbapi_connection: psycopg.Connection, _record: object, _proxy: object) -> None:
+    """Discard a pooled connection that is closed, broken or mid-transaction, or that doesn't
+    answer `select 1`. Raising DisconnectionError makes the pool close it and hand out a fresh
+    connection instead (SQLAlchemy's documented pessimistic disconnect handling); a failed
+    ping also retires the rest of the pool.
+
+    Runs before the request opens its transaction, so nothing is ever retried after a
+    statement or commit: a failure later in a request is reported (503), never replayed.
+    """
+    conn = dbapi_connection
+    if conn.closed or conn.broken:
+        raise exc.DisconnectionError("pooled connection is closed")
+    # The pool rolls back every returned connection; anything else is not safe to reuse,
+    # and autocommit may only change while idle.
+    if conn.info.transaction_status != TransactionStatus.IDLE:
+        raise exc.DisconnectionError("pooled connection is not idle")
+    autocommit = conn.autocommit
+    try:
+        conn.autocommit = True  # no transaction left open by the ping
+        conn.execute("select 1")
+    except psycopg.Error as error:
+        # Don't touch autocommit again here: the pool closes this connection. The others
+        # idled through the same outage (sleep, network change), so retire them all at once
+        # rather than paying a failed ping per request.
+        raise exc.InvalidatePoolError(f"stale pooled connection: {error}") from error
+    conn.autocommit = autocommit
 
 
 @lru_cache

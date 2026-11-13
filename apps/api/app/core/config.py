@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     database_url: str = ""
     db_pool_size: int = 5
     db_max_overflow: int = 5
+    # Pooled connections go stale while idle (Supabase pooler idle limits, laptop sleep or
+    # network changes). Retire them after this many seconds; checkout also pings them.
+    db_pool_recycle_seconds: int = 300
+    # Bound how long opening a connection, or noticing a dead idle one, can take.
+    db_connect_timeout_seconds: int = 10
+    db_keepalive_idle_seconds: int = 30
 
     supabase_url: str = ""
     # Only for projects still on the legacy shared-secret (HS256) JWT signing.
