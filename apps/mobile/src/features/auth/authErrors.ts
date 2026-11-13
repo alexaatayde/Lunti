@@ -3,6 +3,9 @@ import { isAuthError, isAuthRetryableFetchError } from '@supabase/supabase-js';
 export const NETWORK_ERROR = "Can't reach Lunti. Check your connection and try again.";
 export const GENERIC_ERROR = 'Something went wrong. Please try again.';
 export const NOT_CONFIGURED_ERROR = 'Sign-in is not set up for this build yet.';
+/** This build can't create the secure one-time keys sign-up and password reset need. */
+export const SECURE_CRYPTO_ERROR =
+  "This version of Lunti can't do this securely. Update the app and try again.";
 
 const messagesByCode: Record<string, string> = {
   invalid_credentials: 'Email or password is incorrect.',
@@ -29,4 +32,51 @@ export function authErrorMessage(error: unknown): string {
   // fetch() rejects with a TypeError when the device is offline.
   if (error instanceof TypeError && /network/i.test(error.message)) return NETWORK_ERROR;
   return GENERIC_ERROR;
+}
+
+export const RESET_SEND_ERROR = "We couldn't send a reset email right now. Please try again later.";
+export const RATE_LIMIT_ERROR = 'Too many attempts. Wait a minute and try again.';
+
+/**
+ * Message for a failed "send reset link". Deliberately never says whether an account exists
+ * for the address (that is decided by the caller, which treats "no such user" as sent).
+ */
+export function resetRequestErrorMessage(error: unknown): string {
+  if (isAuthRetryableFetchError(error)) return NETWORK_ERROR;
+  if (error instanceof TypeError && /network/i.test(error.message)) return NETWORK_ERROR;
+  if (isAuthError(error)) {
+    if (error.code === 'over_email_send_rate_limit' || error.code === 'over_request_rate_limit') {
+      return RATE_LIMIT_ERROR;
+    }
+    if (error.status === 429) return RATE_LIMIT_ERROR;
+    if (error.code === 'email_address_invalid') return 'Enter a valid email address.';
+  }
+  return RESET_SEND_ERROR;
+}
+
+/** Errors on "Save new password" that mean the reset session is gone. */
+export function isRecoverySessionGone(error: unknown): boolean {
+  if (!isAuthError(error) || isAuthRetryableFetchError(error)) return false;
+  return (
+    error.name === 'AuthSessionMissingError' ||
+    error.code === 'session_not_found' ||
+    error.code === 'session_expired' ||
+    error.code === 'bad_jwt' ||
+    error.status === 401 ||
+    error.status === 403
+  );
+}
+
+const newPasswordMessages: Record<string, string> = {
+  same_password: 'Choose a password different from your current one.',
+  weak_password: messagesByCode.weak_password,
+  over_request_rate_limit: RATE_LIMIT_ERROR,
+};
+
+/** Message for a failed "Save new password" that isn't an ended reset session. */
+export function newPasswordErrorMessage(error: unknown): string {
+  if (isAuthError(error) && error.code && newPasswordMessages[error.code]) {
+    return newPasswordMessages[error.code];
+  }
+  return authErrorMessage(error);
 }

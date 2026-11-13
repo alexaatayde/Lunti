@@ -5,5 +5,6 @@ export const notificationsModuleMock = {
   requestPermissionsAsync: jest.fn(async () => ({ granted: false, canAskAgain: false })),
   setNotificationChannelAsync: jest.fn(async () => null),
   getDevicePushTokenAsync: jest.fn(async () => ({ type: 'android', data: 'fake-fcm-token' })),
+  unregisterForNotificationsAsync: jest.fn(async () => undefined),
   addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
 };

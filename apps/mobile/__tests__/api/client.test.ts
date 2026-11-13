@@ -1,5 +1,21 @@
-import { api, ApiError, apiBaseUrl, REQUEST_TIMEOUT_MS, unwrap } from '../../src/api/client';
-import { fakeAuth, fakeSession, resetFakeSupabase } from '../../test-utils/fakeSupabase';
+import { AuthApiError, AuthRetryableFetchError, AuthSessionMissingError } from '@supabase/supabase-js';
+
+import {
+  api,
+  ApiError,
+  apiBaseUrl,
+  isDefinitiveRejection,
+  postForm,
+  REQUEST_TIMEOUT_MS,
+  unwrap,
+} from '../../src/api/client';
+import { useSessionStore } from '../../src/stores/session';
+import {
+  fakeAuth,
+  fakeSession,
+  resetFakeSupabase,
+  setFakeSession,
+} from '../../test-utils/fakeSupabase';
 
 jest.mock(
   '../../src/lib/supabase',
@@ -22,7 +38,14 @@ const me = {
 };
 
 const json = (status: number, body: unknown, type = 'application/json') =>
-  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': type } });
+  new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'Content-Type': type,
+      // Like the API's auth check, which always says why a 401 happened.
+      ...(status === 401 ? { 'WWW-Authenticate': 'Bearer error="invalid_token"' } : {}),
+    },
+  });
 
 const problem = (status: number, slug: string, detail: string, errors: object[] = []) =>
   json(
@@ -37,6 +60,7 @@ beforeEach(() => {
   const session = fakeSession();
   session.access_token = 'token-1';
   resetFakeSupabase(session);
+  useSessionStore.setState({ status: 'signedIn', session });
   fetchMock = jest.spyOn(globalThis, 'fetch');
 });
 
@@ -96,7 +120,7 @@ describe('API client', () => {
     expect(sentAuth(1)).toBe('Bearer token-2');
   });
 
-  it('gives up with an "unauthorized" error if the refreshed token is also rejected', async () => {
+  it('stops after one retry, without signing out, if the refreshed token is also rejected', async () => {
     fakeAuth.refreshSession.mockResolvedValueOnce({
       data: { session: { ...fakeSession(), access_token: 'token-2' } },
       error: null,
@@ -106,9 +130,172 @@ describe('API client', () => {
     const error = await unwrap(() => api.GET('/api/v1/me')).catch((e) => e);
 
     expect(error).toBeInstanceOf(ApiError);
-    expect(error.kind).toBe('unauthorized');
-    expect(error.message).toBe('Your session has ended. Please sign in again.');
+    // Signing in again would get the same rejection (e.g. a wrong phone clock): no loop.
+    expect(error.kind).toBe('unverified');
+    expect(error.transient).toBe(false);
+    expect(error.message).toMatch(/couldn't verify your sign-in/);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fakeAuth.refreshSession).toHaveBeenCalledTimes(1);
+    expect(fakeAuth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('signs out locally with "Your session ended" when Supabase rejects the refresh', async () => {
+    fakeAuth.refreshSession.mockResolvedValueOnce({
+      data: { session: null },
+      error: new AuthApiError('Invalid Refresh Token: Already Used', 400, 'refresh_token_already_used'),
+    });
+    fetchMock.mockResolvedValue(problem(401, 'unauthorized', 'The access token has expired.'));
+
+    const error = await unwrap(() => api.GET('/api/v1/me')).catch((e) => e);
+
+    expect(error.kind).toBe('unauthorized');
+    expect(error.message).toBe('Your session ended. Please sign in again.');
+    expect(fakeAuth.signOut).toHaveBeenCalledTimes(1);
+    expect(fakeAuth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(fetchMock).toHaveBeenCalledTimes(1); // not retried
+  });
+
+  it('does not sign out again when Supabase already cleared the rejected session', async () => {
+    fakeAuth.refreshSession.mockImplementationOnce(async () => {
+      setFakeSession(null); // Supabase removes the session and emits SIGNED_OUT itself
+      useSessionStore.setState({ status: 'signedOut', session: null });
+      return { data: { session: null }, error: new AuthApiError('Refresh Token Not Found', 400, 'refresh_token_not_found') };
+    });
+    fetchMock.mockResolvedValue(problem(401, 'unauthorized', 'expired'));
+
+    await expect(unwrap(() => api.GET('/api/v1/me'))).rejects.toMatchObject({
+      kind: 'unauthorized',
+    });
+    expect(fakeAuth.signOut).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['offline', new AuthRetryableFetchError('Failed to fetch', 0)],
+    ['Auth server error', new AuthApiError('Internal error', 500, 'unexpected_failure')],
+    ['Auth server 503', new AuthApiError('Service unavailable', 503, undefined)],
+    ['rate limited', new AuthApiError('Too many requests', 429, 'over_request_rate_limit')],
+  ])('keeps the session when the refresh fails because %s', async (_label, refreshError) => {
+    fakeAuth.refreshSession.mockResolvedValueOnce({ data: { session: null }, error: refreshError });
+    fetchMock.mockResolvedValue(problem(401, 'unauthorized', 'expired'));
+
+    const error = await unwrap(() => api.GET('/api/v1/me')).catch((e) => e);
+
+    expect(error.kind).toBe('network');
+    expect(error.transient).toBe(true); // TanStack Query retries it
+    expect(fakeAuth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('keeps the session when the refresh itself throws or hangs', async () => {
+    fakeAuth.refreshSession.mockRejectedValueOnce(new TypeError('Network request failed'));
+    fetchMock.mockResolvedValue(problem(401, 'unauthorized', 'expired'));
+
+    await expect(unwrap(() => api.GET('/api/v1/me'))).rejects.toMatchObject({ kind: 'network' });
+    expect(fakeAuth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('never treats an API 503 as a reason to refresh or sign out', async () => {
+    fetchMock.mockResolvedValue(problem(503, 'service-unavailable', 'Database unavailable.'));
+
+    const error = await unwrap(() => api.GET('/api/v1/me')).catch((e) => e);
+
+    expect(error.kind).toBe('unavailable');
+    expect(fakeAuth.refreshSession).not.toHaveBeenCalled();
+    expect(fakeAuth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('reports a connection problem (not "session ended") when the saved token cannot be refreshed offline', async () => {
+    fakeAuth.getSession.mockResolvedValueOnce({
+      data: { session: null },
+      error: new AuthRetryableFetchError('Failed to fetch', 0),
+    } as never);
+
+    const error = await unwrap(() => api.GET('/api/v1/me')).catch((e) => e);
+
+    expect(error.kind).toBe('network');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeAuth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('shares one refresh between requests rejected at the same time', async () => {
+    let finish!: () => void;
+    fakeAuth.refreshSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () =>
+            resolve({ data: { session: { ...fakeSession(), access_token: 'token-2' } }, error: null });
+        }),
+    );
+    fetchMock.mockImplementation(async (request: Request) =>
+      request.headers.get('Authorization') === 'Bearer token-2'
+        ? json(200, me)
+        : problem(401, 'unauthorized', 'expired'),
+    );
+
+    const first = unwrap(() => api.GET('/api/v1/me'));
+    const second = unwrap(() => api.GET('/api/v1/me'));
+    await waitForCalls(() => fakeAuth.refreshSession.mock.calls.length === 1 && fetchMock.mock.calls.length === 2);
+    finish();
+
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    expect(fakeAuth.refreshSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses a token another request already refreshed instead of refreshing again', async () => {
+    fetchMock
+      .mockResolvedValueOnce(problem(401, 'unauthorized', 'expired'))
+      .mockResolvedValueOnce(json(200, me));
+    // By the time this request looks again, the session holds a newer token.
+    fakeAuth.getSession
+      .mockResolvedValueOnce({ data: { session: { ...fakeSession(), access_token: 'token-1' } }, error: null } as never)
+      .mockResolvedValueOnce({ data: { session: { ...fakeSession(), access_token: 'token-9' } }, error: null } as never);
+
+    await expect(unwrap(() => api.GET('/api/v1/me'))).resolves.toMatchObject({ email: me.email });
+    expect(fakeAuth.refreshSession).not.toHaveBeenCalled();
+    expect(sentAuth(1)).toBe('Bearer token-9');
+  });
+
+  it('does not replay a 401 that did not come from the API auth check', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('{}', { status: 401, headers: { 'Content-Type': 'application/json' } }),
+    );
+
+    await expect(unwrap(() => api.POST('/api/v1/devices', { body: { fcm_token: 't', platform: 'android' } } as never))).rejects.toMatchObject({ kind: 'unauthorized' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fakeAuth.refreshSession).not.toHaveBeenCalled();
+    expect(fakeAuth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('refreshes and resends a multipart upload with a fresh body', async () => {
+    fakeAuth.refreshSession.mockResolvedValueOnce({
+      data: { session: { ...fakeSession(), access_token: 'token-2' } },
+      error: null,
+    });
+    fetchMock
+      .mockResolvedValueOnce(problem(401, 'unauthorized', 'expired'))
+      .mockResolvedValueOnce(json(201, { id: 'r1' }));
+    const makeBody = jest.fn(() => new FormData());
+
+    await expect(postForm('/api/v1/receipts', makeBody)).resolves.toEqual({
+      data: { id: 'r1' },
+      status: 201,
+    });
+    expect(makeBody).toHaveBeenCalledTimes(2);
+    const headers = (call: number) => fetchMock.mock.calls[call][1].headers as Record<string, string>;
+    expect(headers(0).Authorization).toBe('Bearer token-1');
+    expect(headers(1).Authorization).toBe('Bearer token-2');
+  });
+
+  it('signs out an upload whose refresh Supabase rejects', async () => {
+    fakeAuth.refreshSession.mockResolvedValueOnce({
+      data: { session: null },
+      error: new AuthSessionMissingError(),
+    });
+    fetchMock.mockResolvedValueOnce(problem(401, 'unauthorized', 'expired'));
+
+    await expect(postForm('/api/v1/receipts', () => new FormData())).rejects.toMatchObject({
+      kind: 'unauthorized',
+    });
+    expect(fakeAuth.signOut).toHaveBeenCalledWith({ scope: 'local' });
   });
 
   it('turns RFC 7807 validation problems into field errors', async () => {
@@ -208,6 +395,17 @@ describe('API client', () => {
     }
   });
 
+  it('classifies refresh errors: only a 4xx from Supabase Auth (or no session) is final', () => {
+    expect(isDefinitiveRejection(new AuthApiError('x', 400, 'refresh_token_not_found'))).toBe(true);
+    expect(isDefinitiveRejection(new AuthApiError('x', 401, 'bad_jwt'))).toBe(true);
+    expect(isDefinitiveRejection(new AuthSessionMissingError())).toBe(true);
+    expect(isDefinitiveRejection(new AuthApiError('x', 429, 'over_request_rate_limit'))).toBe(false);
+    expect(isDefinitiveRejection(new AuthApiError('x', 408, undefined))).toBe(false);
+    expect(isDefinitiveRejection(new AuthApiError('x', 500, undefined))).toBe(false);
+    expect(isDefinitiveRejection(new AuthRetryableFetchError('offline', 0))).toBe(false);
+    expect(isDefinitiveRejection(new TypeError('Network request failed'))).toBe(false);
+  });
+
   it('sends no Authorization header when signed out', async () => {
     resetFakeSupabase(null);
     fetchMock.mockResolvedValue(problem(401, 'unauthorized', 'Sign in to continue.'));
@@ -219,3 +417,8 @@ describe('API client', () => {
     expect(fakeAuth.refreshSession).not.toHaveBeenCalled();
   });
 });
+
+async function waitForCalls(ready: () => boolean) {
+  for (let i = 0; i < 50 && !ready(); i += 1) await new Promise((r) => setTimeout(r, 0));
+  expect(ready()).toBe(true);
+}

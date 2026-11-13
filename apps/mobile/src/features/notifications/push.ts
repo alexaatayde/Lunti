@@ -113,6 +113,24 @@ export async function unregisterFromPush(): Promise<void> {
   }
 }
 
+/**
+ * For a session that ended without a sign-out request (refresh refused: revoked, expired,
+ * password changed elsewhere). The API can't be told any more, so the FCM token is deleted on
+ * the phone (Firebase `deleteToken`): FCM then reports it dead and the server drops it on its
+ * next send, so this phone stops showing the account's notifications. Best effort; the next
+ * sign-in registers a fresh token.
+ */
+export async function releasePushToken(): Promise<void> {
+  registeredToken = null;
+  const Notifications = loadNotifications();
+  if (!Notifications) return;
+  try {
+    await Notifications.unregisterForNotificationsAsync();
+  } catch (error) {
+    if (__DEV__) console.warn('Push token release skipped:', error);
+  }
+}
+
 /** Registers once per sign-in and opens the notification's screen when one is tapped. */
 export function usePushNotifications(signedIn: boolean) {
   useEffect(() => {

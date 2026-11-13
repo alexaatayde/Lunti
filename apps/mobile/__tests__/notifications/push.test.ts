@@ -8,6 +8,7 @@ import {
   loadNotifications,
   pushSupported,
   registerForPush,
+  releasePushToken,
   resetPushForTests,
   unregisterFromPush,
   usePushNotifications,
@@ -94,6 +95,26 @@ describe('Android development or release build (native push available)', () => {
     });
   });
 
+  it('deletes the FCM token on the phone when the session ends without a sign-out', async () => {
+    mocked.getPermissionsAsync.mockResolvedValueOnce({ granted: true, canAskAgain: true } as never);
+    await registerForPush();
+
+    await releasePushToken();
+
+    expect(mocked.unregisterForNotificationsAsync).toHaveBeenCalledTimes(1);
+    // The API can't be reached with a dead session, so it is not called.
+    expect(api.calls('DELETE', '/api/v1/devices/fake-fcm-token')).toHaveLength(0);
+    await unregisterFromPush(); // nothing left to remove afterwards
+    expect(api.calls('DELETE', '/api/v1/devices/fake-fcm-token')).toHaveLength(0);
+  });
+
+  it('keeps going if Firebase cannot delete the token', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mocked.unregisterForNotificationsAsync.mockRejectedValueOnce(new Error('offline'));
+
+    await expect(releasePushToken()).resolves.toBeUndefined();
+  });
+
   it('opens the deep link of a tapped notification, and unsubscribes on unmount', async () => {
     const push = jest.spyOn(router, 'push').mockImplementation(() => {});
     const { unmount } = await renderHook(() => usePushNotifications(false));
@@ -125,6 +146,11 @@ describe.each(['android', 'ios'] as const)('Expo Go on %s (no FCM push)', (os) =
     expect(mocked.addNotificationResponseReceivedListener).not.toHaveBeenCalled();
     expect(api.calls('POST', '/api/v1/devices')).toHaveLength(0);
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('has no token to release when the session ends', async () => {
+    await expect(releasePushToken()).resolves.toBeUndefined();
+    expect(mocked.unregisterForNotificationsAsync).not.toHaveBeenCalled();
   });
 
   it('signs out without calling the API, since no token was registered', async () => {

@@ -1,17 +1,23 @@
 /** Small pieces shared by the Welcome, Sign in and Sign up screens. */
 import { Image } from 'expo-image';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
 import {
   AlertCircleIcon,
   AppText,
+  ChevronLeftIcon,
+  CloseIcon,
   EyeIcon,
   EyeOffIcon,
+  InfoIcon,
+  PageTitle,
   TextField,
   type TextFieldProps,
 } from '../../components';
+import { useSessionStore } from '../../stores/session';
 import { colors, font, radius, sizes, spacing } from '../../theme';
 import { passwordStrength } from './schemas';
 
@@ -169,6 +175,94 @@ export function FormError({ message }: { message: string | null }) {
   );
 }
 
+export const SESSION_ENDED_MESSAGE = 'Your session ended. Please sign in again.';
+
+/**
+ * "Your session ended…" banner on Welcome and Sign in, after a sign-out the user didn't ask
+ * for. Icon + text (not color alone); dismissible; cleared by the next sign-in.
+ */
+export function SessionEndedNotice({ style }: { style?: StyleProp<ViewStyle> }) {
+  const notice = useSessionStore((s) => s.notice);
+  const setNotice = useSessionStore((s) => s.setNotice);
+  if (notice !== 'sessionEnded') return null;
+  return (
+    <View
+      style={[styles.notice, style]}
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
+    >
+      <InfoIcon size={18} color={colors.warnText} />
+      <AppText variant="body" color={colors.warnStrong} style={styles.noticeText}>
+        {SESSION_ENDED_MESSAGE}
+      </AppText>
+      <Pressable
+        onPress={() => setNotice(null)}
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss message"
+        hitSlop={4}
+        style={({ pressed }) => [styles.noticeClose, pressed && styles.pressed]}
+      >
+        <CloseIcon size={16} color={colors.warnStrong} />
+      </Pressable>
+    </View>
+  );
+}
+
+/** "‹ Sign in" link at the top of the secondary auth screens (SignUp.html header). */
+export function BackLink({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <View style={styles.backRow}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="link"
+        accessibilityLabel={`Back to ${label.toLowerCase()}`}
+        style={({ pressed }) => [styles.back, pressed && styles.pressed]}
+      >
+        <ChevronLeftIcon size={20} color={colors.primaryLink} />
+        <AppText style={styles.backText}>{label}</AppText>
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * Full-screen message for a step in an auth flow ("Check your email", "Link expired",
+ * "Password updated"): icon tile, title, text, and actions pinned to the bottom.
+ * Built in the style of Sign up's "Check your email" (not in the design handoff).
+ */
+export function AuthStatus({
+  icon,
+  tone = 'primary',
+  eyebrow,
+  title,
+  children,
+  actions,
+}: {
+  icon: ReactNode;
+  tone?: 'primary' | 'warn';
+  eyebrow: string;
+  title: string;
+  children: ReactNode;
+  actions: ReactNode;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      style={[
+        styles.status,
+        { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 32 },
+      ]}
+    >
+      <View style={styles.statusBody}>
+        <View style={[styles.statusTile, tone === 'warn' && styles.statusTileWarn]}>{icon}</View>
+        <PageTitle eyebrow={eyebrow} title={title} />
+        {children}
+      </View>
+      <View style={styles.statusActions}>{actions}</View>
+    </View>
+  );
+}
+
 /** "New to Lunti? Create an account" — plain text followed by a 44 px tall link. */
 export function TextLinkRow({
   text,
@@ -200,6 +294,51 @@ export function TextLinkRow({
 
 const styles = StyleSheet.create({
   logo: { flexDirection: 'row', alignItems: 'center' },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingLeft: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.iconTileLarge,
+    backgroundColor: colors.warnBg,
+    borderWidth: 1,
+    borderColor: colors.warnBorder,
+  },
+  noticeText: { flex: 1, paddingVertical: spacing.sm },
+  noticeClose: {
+    width: sizes.touchTarget,
+    height: sizes.touchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backRow: { paddingHorizontal: spacing.md, flexDirection: 'row' },
+  back: {
+    minHeight: sizes.touchTarget,
+    paddingLeft: spacing.xs,
+    paddingRight: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+  },
+  backText: { ...font(600), fontSize: 15, lineHeight: 20, color: colors.primaryLink },
+  status: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    paddingHorizontal: spacing.xxl,
+    justifyContent: 'space-between',
+  },
+  statusBody: { gap: spacing.lg },
+  statusTile: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.iconTileLarge,
+    backgroundColor: colors.primaryChipBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusTileWarn: { backgroundColor: colors.warnBg },
+  statusActions: { gap: spacing.md },
   leaf: { position: 'absolute' },
   eye: {
     width: 40,

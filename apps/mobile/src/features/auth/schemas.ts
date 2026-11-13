@@ -20,6 +20,13 @@ export const PASSWORD_MIN = 8;
 /** Supabase (bcrypt) ignores anything past 72 bytes, so longer passwords are refused up front. */
 export const PASSWORD_MAX = 72;
 
+/** New-password rule shared by sign-up and password reset (mirrors Supabase's settings). */
+const newPassword = z
+  .string()
+  .min(PASSWORD_MIN, { error: `Use at least ${PASSWORD_MIN} characters.` })
+  .max(PASSWORD_MAX, { error: `Use ${PASSWORD_MAX} characters or fewer.` })
+  .regex(/\d/, { error: 'Add at least one number.' });
+
 export const signUpSchema = z
   .object({
     fullName: z
@@ -28,11 +35,7 @@ export const signUpSchema = z
       .min(1, { error: 'Enter your full name.' })
       .max(100, { error: 'Use 100 characters or fewer.' }),
     email,
-    password: z
-      .string()
-      .min(PASSWORD_MIN, { error: `Use at least ${PASSWORD_MIN} characters.` })
-      .max(PASSWORD_MAX, { error: `Use ${PASSWORD_MAX} characters or fewer.` })
-      .regex(/\d/, { error: 'Add at least one number.' }),
+    password: newPassword,
     confirmPassword: z.string().min(1, { error: 'Type your password again.' }),
     // RA 10173: both consents are required (DESIGN_HANDOFF.md §5.6).
     acceptTerms: z
@@ -45,10 +48,25 @@ export const signUpSchema = z
     path: ['confirmPassword'],
   });
 
+export const forgotPasswordSchema = z.object({ email });
+
+export const resetPasswordSchema = z
+  .object({
+    password: newPassword,
+    confirmPassword: z.string().min(1, { error: 'Type your new password again.' }),
+  })
+  .refine((v) => !v.confirmPassword || v.password === v.confirmPassword, {
+    error: "Passwords don't match.",
+    path: ['confirmPassword'],
+  });
+
 export type SignInInput = z.input<typeof signInSchema>;
 export type SignInValues = z.output<typeof signInSchema>;
 export type SignUpInput = z.input<typeof signUpSchema>;
 export type SignUpValues = z.output<typeof signUpSchema>;
+
+export type ForgotPasswordValues = z.output<typeof forgotPasswordSchema>;
+export type ResetPasswordValues = z.output<typeof resetPasswordSchema>;
 
 export type PasswordStrength = { score: 0 | 1 | 2 | 3 | 4; label: string };
 

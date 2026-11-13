@@ -21,6 +21,11 @@ export type AuthStorage = {
   removeItem(key: string): Promise<void>;
   /** true (default): keep the session across app restarts. false: memory only. */
   setPersist(persist: boolean): void;
+  /**
+   * Moves a saved value off the device into memory and stops persisting, e.g. the temporary
+   * session a password-reset link opens: it must not survive an app restart.
+   */
+  holdInMemory(key: string): Promise<void>;
 };
 
 /** Well under the ~2048-byte limit, leaving room for multi-byte characters. */
@@ -91,6 +96,12 @@ export function createAuthStorage(store: KeyValueStore): AuthStorage {
     },
     setPersist(value) {
       persist = value;
+    },
+    async holdInMemory(key) {
+      const value = memory.get(key) ?? (await readStored(key));
+      persist = false;
+      if (value !== null) memory.set(key, value);
+      await removeStored(key);
     },
   };
 }

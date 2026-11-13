@@ -17,7 +17,7 @@ import { useAuthListener } from '../src/features/auth/useAuthListener';
 import { SetupRequired } from '../src/features/auth/SetupRequired';
 import { ToastHost } from '../src/features/money/ToastHost';
 import { isSupabaseConfigured } from '../src/lib/supabase';
-import { useSessionStore } from '../src/stores/session';
+import { selectSignedIn, useSessionStore } from '../src/stores/session';
 import { colors } from '../src/theme';
 import { usePushNotifications } from '../src/features/notifications/push';
 
@@ -41,7 +41,9 @@ export default function RootLayout() {
   useAuthListener();
   useResetQueriesOnUserChange();
   const status = useSessionStore((s) => s.status);
-  usePushNotifications(status === 'signedIn');
+  // A password-reset session is not a normal sign-in: no push registration, no app screens.
+  const signedIn = useSessionStore(selectSignedIn);
+  usePushNotifications(signedIn);
 
   // If fonts fail to load, carry on with the system font rather than a blank app.
   const ready = (fontsLoaded || !!fontError) && status !== 'loading';
@@ -52,8 +54,6 @@ export default function RootLayout() {
 
   if (!ready) return null;
   if (!isSupabaseConfigured) return <SetupRequired />;
-
-  const signedIn = status === 'signedIn';
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -75,6 +75,8 @@ export default function RootLayout() {
         <Stack.Protected guard={!signedIn} redirectTo="/home">
           <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
         </Stack.Protected>
+        {/* Opened from the password-reset email whether or not someone is signed in. */}
+        <Stack.Screen name="reset-password" options={{ animation: 'fade' }} />
         {/* index only redirects, based on the session. */}
         <Stack.Screen name="index" />
       </Stack>

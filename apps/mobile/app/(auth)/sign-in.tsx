@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
   KeyboardAvoidingView,
+  Pressable,
   ScrollView,
   StyleSheet,
   View,
@@ -30,10 +31,11 @@ import {
   FormError,
   LeafShape,
   PasswordField,
+  SessionEndedNotice,
   TextLinkRow,
 } from '../../src/features/auth/components';
 import { signInSchema } from '../../src/features/auth/schemas';
-import { colors, spacing } from '../../src/theme';
+import { colors, font, sizes, spacing } from '../../src/theme';
 
 export default function SignInScreen() {
   const insets = useSafeAreaInsets();
@@ -42,6 +44,7 @@ export default function SignInScreen() {
   const {
     control,
     handleSubmit,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(signInSchema),
@@ -76,6 +79,7 @@ export default function SignInScreen() {
         </View>
 
         <View style={styles.form}>
+          <SessionEndedNotice />
           <Controller
             control={control}
             name="email"
@@ -119,19 +123,34 @@ export default function SignInScreen() {
             )}
           />
 
-          {/* "Forgot password?" is not built yet: the reset flow has no design (AGENTS.md §13). */}
-          <Controller
-            control={control}
-            name="keepSignedIn"
-            render={({ field }) => (
-              <Checkbox
-                label="Keep me signed in"
-                checked={field.value}
-                onChange={field.onChange}
-                style={styles.keepSignedIn}
-              />
-            )}
-          />
+          <View style={styles.options}>
+            <Controller
+              control={control}
+              name="keepSignedIn"
+              render={({ field }) => (
+                <Checkbox
+                  label="Keep me signed in"
+                  checked={field.value}
+                  onChange={field.onChange}
+                  style={styles.keepSignedIn}
+                />
+              )}
+            />
+            {/* SignIn.html: right-aligned "Forgot password?" link. */}
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: '/forgot-password',
+                  params: { email: getValues('email').trim() },
+                })
+              }
+              accessibilityRole="link"
+              accessibilityLabel="Forgot password?"
+              style={({ pressed }) => [styles.forgot, pressed && styles.pressed]}
+            >
+              <AppText style={styles.forgotText}>Forgot password?</AppText>
+            </Pressable>
+          </View>
 
           <FormError message={formError} />
 
@@ -179,7 +198,16 @@ const styles = StyleSheet.create({
   heroText: { marginTop: 28 },
   subtitle: { marginTop: 6 },
   form: { paddingTop: 28, paddingHorizontal: spacing.xxl, gap: spacing.lg },
-  keepSignedIn: { alignSelf: 'flex-start' },
+  options: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  keepSignedIn: { flexShrink: 1 },
+  forgot: { minHeight: sizes.touchTarget, justifyContent: 'center', paddingLeft: spacing.xs },
+  forgotText: { ...font(600), fontSize: 13, lineHeight: 18, color: colors.primaryLink },
+  pressed: { opacity: 0.6 },
   submit: { marginTop: spacing.xs },
   footer: {
     flexGrow: 1,

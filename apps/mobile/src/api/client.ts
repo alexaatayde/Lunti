@@ -3,13 +3,20 @@
  *   apps/api: python -m scripts.export_openapi  →  src/api/openapi.json
  *   apps/mobile: npm run api:generate          →  src/api/schema.d.ts
  *
- * Every request carries the Supabase access token. On a 401 the token is refreshed once and
- * the request retried. Failures become an ApiError with a message safe to show on screen.
+ * Every request carries the Supabase access token. When the API rejects it (401), the session is
+ * refreshed once and the request retried; see `authorized` for what happens when that fails.
+ * Failures become an ApiError with a message safe to show on screen.
  */
+import {
+  isAuthApiError,
+  isAuthRetryableFetchError,
+  isAuthSessionMissingError,
+} from '@supabase/supabase-js';
 import createClient from 'openapi-fetch';
 
 import { env } from '../lib/env';
 import { supabase } from '../lib/supabase';
+import { useSessionStore } from '../stores/session';
 import type { components, paths } from './schema';
 
 export type Problem = components['schemas']['Problem'];
@@ -18,6 +25,7 @@ export type ApiErrorKind =
   | 'config'
   | 'network'
   | 'unauthorized'
+  | 'unverified'
   | 'validation'
   | 'not-found'
   | 'conflict'
@@ -27,7 +35,11 @@ export type ApiErrorKind =
 const MESSAGES: Record<ApiErrorKind, string> = {
   config: 'The app is not connected to the Lunti server yet.',
   network: "Can't reach Lunti. Check your connection and try again.",
-  unauthorized: 'Your session has ended. Please sign in again.',
+  unauthorized: 'Your session ended. Please sign in again.',
+  // The session was refreshed, yet the API still rejects it. Signing in again would not help
+  // (and could loop); the usual cause is a phone clock that is far off.
+  unverified:
+    "Lunti couldn't verify your sign-in. Check that your phone's date and time are correct, then try again.",
   validation: 'Some details need fixing.',
   'not-found': "We couldn't find that.",
   conflict: 'That conflicts with something you already have.',
@@ -105,14 +117,109 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  * The current access token. Bounded by the request timeout too: right after a cold start,
  * Supabase may still be restoring or refreshing the saved session, and a stuck lookup would
  * otherwise leave the screen loading forever. The query retry then asks again.
+ *
+ * Supabase refreshes an expired token here by itself. If that refresh could not reach the
+ * server, the saved session is still there but no token comes back: that is a connection
+ * problem, not a signed-out user, so it must not turn into a 401 "session ended".
  */
-async function accessToken(refresh: boolean): Promise<string | null> {
+async function accessToken(): Promise<string | null> {
   if (!supabase) return null;
-  const lookup: Promise<{ data: { session: { access_token: string } | null } }> = refresh
-    ? supabase.auth.refreshSession()
-    : supabase.auth.getSession();
-  const { data } = await withTimeout(lookup, REQUEST_TIMEOUT_MS);
-  return data.session?.access_token ?? null;
+  const { data, error } = await withTimeout(supabase.auth.getSession(), REQUEST_TIMEOUT_MS);
+  const token = data.session?.access_token ?? null;
+  if (!token && error && !isDefinitiveRejection(error)) throw new ApiError('network', 0);
+  return token;
+}
+
+/**
+ * Supabase Auth refused the refresh token itself (revoked, expired, already used, user gone),
+ * or there is no session left to refresh. Anything else — offline, timeout, rate limit, an
+ * Auth server error — is temporary and must never sign the user out.
+ */
+export function isDefinitiveRejection(error: unknown): boolean {
+  if (isAuthSessionMissingError(error)) return true;
+  if (isAuthRetryableFetchError(error) || !isAuthApiError(error)) return false;
+  return error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429;
+}
+
+type RefreshOutcome =
+  | { kind: 'token'; token: string }
+  /** The session is over: the user must sign in again. */
+  | { kind: 'rejected' }
+  /** Couldn't refresh right now (offline, timeout, Auth server trouble). */
+  | { kind: 'unavailable' };
+
+/** One refresh at a time: requests that fail together share it instead of each refreshing. */
+let refreshing: Promise<RefreshOutcome> | null = null;
+
+/**
+ * A token to retry with after `rejectedToken` got a 401. If another request already refreshed
+ * the session meanwhile, its newer token is reused instead of refreshing again.
+ */
+async function replacementToken(rejectedToken: string): Promise<RefreshOutcome> {
+  if (!supabase) return { kind: 'rejected' };
+  const auth = supabase.auth;
+  refreshing ??= (async (): Promise<RefreshOutcome> => {
+    try {
+      const current = await withTimeout(auth.getSession(), REQUEST_TIMEOUT_MS);
+      const latest = current.data.session?.access_token;
+      if (latest && latest !== rejectedToken) return { kind: 'token', token: latest };
+
+      const { data, error } = await withTimeout(auth.refreshSession(), REQUEST_TIMEOUT_MS);
+      if (data.session?.access_token) return { kind: 'token', token: data.session.access_token };
+      return error && isDefinitiveRejection(error) ? { kind: 'rejected' } : { kind: 'unavailable' };
+    } catch {
+      return { kind: 'unavailable' };
+    }
+  })().finally(() => {
+    refreshing = null;
+  });
+  const outcome = await refreshing;
+  if (outcome.kind === 'rejected') await endSession();
+  return outcome;
+}
+
+/**
+ * Clears the dead session on this device. Supabase usually does this itself when it refuses a
+ * refresh, but not when the old access token still looks valid to the phone's clock. The auth
+ * listener sees a sign-out the user didn't ask for, shows "Your session ended…", and the route
+ * guard opens Welcome. Runs at most once per session: later failures find it signed out.
+ */
+async function endSession() {
+  if (!supabase || useSessionStore.getState().status !== 'signedIn') return;
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+}
+
+/**
+ * Our API rejected the token in its auth check (it always sends `WWW-Authenticate: Bearer` with
+ * those 401s). That check runs before any route code, so nothing was saved and the request is
+ * safe to send again, even a POST.
+ */
+function isTokenRejection(response: Response): boolean {
+  return (
+    response.status === 401 &&
+    /^bearer\b/i.test(response.headers.get('WWW-Authenticate') ?? '')
+  );
+}
+
+/**
+ * Sends a request with the user's token. On a token rejection:
+ * - refreshed → retried once with the new token; a second 401 is `unverified` (no sign-out,
+ *   so no sign-in/sign-out loop);
+ * - refresh refused by Supabase → the local session is cleared (`unauthorized`);
+ * - refresh not possible right now → `network` (retryable; the user stays signed in).
+ */
+async function authorized(send: (token: string | null) => Promise<Response>) {
+  const token = await accessToken();
+  const response = await send(token);
+  if (!token || !isTokenRejection(response)) return response;
+
+  const outcome = await replacementToken(token);
+  if (outcome.kind === 'rejected') throw new ApiError('unauthorized', 401);
+  if (outcome.kind === 'unavailable') throw new ApiError('network', 0);
+  if (outcome.token === token) throw new ApiError('unverified', 401);
+  const retried = await send(outcome.token);
+  if (retried.status === 401) throw new ApiError('unverified', 401);
+  return retried;
 }
 
 async function send(request: Request, token: string | null): Promise<Response> {
@@ -134,14 +241,9 @@ async function send(request: Request, token: string | null): Promise<Response> {
   }
 }
 
-/** fetch with the user's token; refreshes and retries once if the API says 401. */
-export async function authFetch(request: Request): Promise<Response> {
-  const token = await accessToken(false);
-  const response = await send(request, token);
-  if (response.status !== 401 || !token) return response;
-  const refreshed = await accessToken(true).catch(() => null);
-  if (!refreshed || refreshed === token) return response;
-  return send(request, refreshed);
+/** fetch with the user's token, refreshing it if the API rejects it (see `authorized`). */
+export function authFetch(request: Request): Promise<Response> {
+  return authorized((token) => send(request, token));
 }
 
 export const api = createClient<paths>({
@@ -178,7 +280,7 @@ export const UPLOAD_TIMEOUT_MS = 60_000;
 
 /**
  * POST a multipart form (openapi-fetch can't stream React Native file parts). `makeBody`
- * builds a fresh FormData per attempt, so the 401 refresh-and-retry resends the photo.
+ * builds a fresh FormData per attempt, so the refresh-and-retry after a 401 resends the photo.
  * Returns the parsed JSON and the status (200 = the server already had this upload).
  */
 export async function postForm<T>(
@@ -207,12 +309,7 @@ export async function postForm<T>(
     }
   };
 
-  const token = await accessToken(false);
-  let response = await attempt(token);
-  if (response.status === 401 && token) {
-    const refreshed = await accessToken(true).catch(() => null);
-    if (refreshed && refreshed !== token) response = await attempt(refreshed);
-  }
+  const response = await authorized(attempt);
   const body: unknown = await response.json().catch(() => undefined);
   if (response.ok) return { data: body as T, status: response.status };
   throw new ApiError(

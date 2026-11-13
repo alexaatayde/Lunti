@@ -6,7 +6,10 @@
  */
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
+import { useSessionStore } from '../src/stores/session';
+
 type Listener = (event: AuthChangeEvent, session: Session | null) => void;
+type SessionResult = { data: { session: Session | null }; error: unknown };
 
 const listeners = new Set<Listener>();
 let current: Session | null = null;
@@ -30,9 +33,15 @@ export function fakeSession(email = 'alex@example.com'): Session {
 }
 
 /** Changes the session and notifies listeners, like a real sign-in, sign-out or expiry. */
-export function setFakeSession(session: Session | null) {
+export function setFakeSession(session: Session | null, event?: AuthChangeEvent) {
   current = session;
-  listeners.forEach((listener) => listener(session ? 'SIGNED_IN' : 'SIGNED_OUT', session));
+  const sent = event ?? (session ? 'SIGNED_IN' : 'SIGNED_OUT');
+  listeners.forEach((listener) => listener(sent, session));
+}
+
+/** The session the fake currently holds (what getSession would return). */
+export function currentFakeSession() {
+  return current;
 }
 
 export const fakeAuth = {
@@ -44,15 +53,21 @@ export const fakeAuth = {
   signInWithPassword: jest.fn(),
   signUp: jest.fn(),
   signOut: jest.fn(),
-  getSession: jest.fn(async () => ({ data: { session: current }, error: null })),
-  refreshSession: jest.fn(async () => ({ data: { session: current }, error: null })),
+  getSession: jest.fn(async (): Promise<SessionResult> => ({ data: { session: current }, error: null })),
+  refreshSession: jest.fn(
+    async (): Promise<SessionResult> => ({ data: { session: current }, error: null }),
+  ),
+  resetPasswordForEmail: jest.fn(),
+  exchangeCodeForSession: jest.fn(),
+  updateUser: jest.fn(),
 };
 
-export const fakeAuthStorage = { setPersist: jest.fn() };
+export const fakeAuthStorage = { setPersist: jest.fn(), holdInMemory: jest.fn() };
 
 export const supabaseModuleMock = {
   supabase: { auth: fakeAuth },
   authStorage: fakeAuthStorage,
+  AUTH_STORAGE_KEY: 'lunti.auth',
   isSupabaseConfigured: true,
   missingSupabaseEnv: [],
 };
@@ -69,6 +84,22 @@ export function resetFakeSupabase(session: Session | null = null) {
     return { error: null };
   });
   fakeAuthStorage.setPersist.mockClear();
-  fakeAuth.getSession.mockClear();
-  fakeAuth.refreshSession.mockClear();
+  fakeAuthStorage.holdInMemory.mockReset().mockResolvedValue(undefined);
+  fakeAuth.getSession
+    .mockReset()
+    .mockImplementation(async () => ({ data: { session: current }, error: null }));
+  fakeAuth.refreshSession
+    .mockReset()
+    .mockImplementation(async () => ({ data: { session: current }, error: null }));
+  fakeAuth.resetPasswordForEmail.mockReset().mockResolvedValue({ data: {}, error: null });
+  fakeAuth.exchangeCodeForSession.mockReset().mockImplementation(async () => {
+    const session = fakeSession();
+    setFakeSession(session, 'PASSWORD_RECOVERY');
+    return { data: { session, user: session.user, redirectType: 'recovery' }, error: null };
+  });
+  fakeAuth.updateUser.mockReset().mockImplementation(async () => ({
+    data: { user: current?.user ?? null },
+    error: null,
+  }));
+  useSessionStore.setState({ notice: null, recovering: false });
 }

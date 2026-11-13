@@ -51,16 +51,94 @@ async function open() {
   return router;
 }
 
-it('groups new and earlier notifications from the API', async () => {
-  api.set(`GET ${LIST}`, { items: [notification(), restock], unread_count: 1 });
-  await open();
+/**
+ * Freeze only the Date clock at an explicit Manila wall time ("+08:00" offset), so relative
+ * labels ("2h ago", "Yesterday") do not depend on when or in which host time zone the test
+ * runs. Timers stay real so React Query and the router keep working normally.
+ */
+function freezeClockAt(manilaIso: string) {
+  jest.useFakeTimers({
+    now: new Date(manilaIso),
+    doNotFake: [
+      'hrtime',
+      'nextTick',
+      'performance',
+      'queueMicrotask',
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'requestIdleCallback',
+      'cancelIdleCallback',
+      'setImmediate',
+      'clearImmediate',
+      'setInterval',
+      'clearInterval',
+      'setTimeout',
+      'clearTimeout',
+    ],
+  });
+}
 
-  expect(await screen.findByText('New · 1')).toBeOnTheScreen();
-  expect(screen.getByText('Earlier')).toBeOnTheScreen();
-  expect(screen.getByText('Groceries budget exceeded')).toBeOnTheScreen();
-  expect(screen.getByText('2h ago')).toBeOnTheScreen();
-  expect(screen.getByRole('button', { name: 'Add Eggs (12) to list' })).toBeOnTheScreen();
-  expect(screen.getByRole('button', { name: 'I still have some Eggs (12)' })).toBeOnTheScreen();
+describe('with a frozen clock', () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('groups new and earlier notifications from the API', async () => {
+    // Saturday 14 Nov 2026, 14:00 in Manila; the alert came at 12:00 the same Manila day.
+    freezeClockAt('2026-11-14T14:00:00+08:00');
+    api.set(`GET ${LIST}`, {
+      items: [notification({ created_at: '2026-11-14T12:00:00+08:00' }), restock],
+      unread_count: 1,
+    });
+    await open();
+
+    expect(await screen.findByText('New · 1')).toBeOnTheScreen();
+    expect(screen.getByText('Earlier')).toBeOnTheScreen();
+    expect(screen.getByText('Groceries budget exceeded')).toBeOnTheScreen();
+    expect(screen.getByText('2h ago')).toBeOnTheScreen();
+    expect(screen.getByText('Oct 20')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Add Eggs (12) to list' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'I still have some Eggs (12)' })).toBeOnTheScreen();
+  });
+
+  // The old fixture (now − 2 h) failed between 00:00 and 02:00 Manila: two hours earlier is
+  // the previous Manila day, which the screen correctly labels "Yesterday".
+  it('labels by Manila calendar day across midnight', async () => {
+    // 00:30 on 14 Nov in Manila = 16:30 UTC on 13 Nov.
+    freezeClockAt('2026-11-14T00:30:00+08:00');
+    api.set(`GET ${LIST}`, {
+      items: [
+        notification({
+          id: 'n-a',
+          title: 'After midnight',
+          created_at: '2026-11-14T00:05:00+08:00',
+        }),
+        notification({
+          id: 'n-b',
+          title: 'Before midnight',
+          created_at: '2026-11-13T22:30:00+08:00',
+        }),
+        notification({ id: 'n-c', title: 'Two days ago', created_at: '2026-11-12T23:59:00+08:00' }),
+      ],
+      unread_count: 3,
+    });
+    await open();
+
+    expect(await screen.findByText('New · 3')).toBeOnTheScreen();
+    expect(screen.getByLabelText(/^Unread\. After midnight\..*25m ago$/)).toBeOnTheScreen();
+    expect(screen.getByLabelText(/^Unread\. Before midnight\..*Yesterday$/)).toBeOnTheScreen();
+    expect(screen.getByLabelText(/^Unread\. Two days ago\..*Nov 12$/)).toBeOnTheScreen();
+  });
+
+  it('labels the same Manila day in hours just before midnight', async () => {
+    // 23:50 on 13 Nov in Manila; 01:00 the same Manila day is still "today".
+    freezeClockAt('2026-11-13T23:50:00+08:00');
+    api.set(`GET ${LIST}`, {
+      items: [notification({ created_at: '2026-11-13T01:00:00+08:00' })],
+      unread_count: 1,
+    });
+    await open();
+
+    expect(await screen.findByText('22h ago')).toBeOnTheScreen();
+  });
 });
 
 it('opens a budget alert, marking it read', async () => {

@@ -86,4 +86,20 @@ describe('authStorage', () => {
     // After a restart nothing was saved, so the user is signed out.
     expect(await createAuthStorage(store).getItem(KEY)).toBeNull();
   });
+
+  it('holdInMemory moves a saved session off the device for the rest of this run', async () => {
+    const { data, store } = memoryStore();
+    const storage = createAuthStorage(store);
+    await storage.setItem(KEY, bigSession);
+
+    await storage.holdInMemory(KEY);
+
+    expect(data.size).toBe(0); // nothing left in the keystore
+    expect(await storage.getItem(KEY)).toBe(bigSession);
+    // Later writes (token refresh) stay in memory too…
+    await storage.setItem(KEY, '{"refreshed":true}');
+    expect(data.size).toBe(0);
+    // …and a restart (new storage over the same keystore) finds no session.
+    expect(await createAuthStorage(store).getItem(KEY)).toBeNull();
+  });
 });

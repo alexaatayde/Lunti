@@ -17,7 +17,7 @@ import {
   ProgressBar,
   TintCard,
 } from '../../src/components';
-import { AuthLogo, LeafShape } from '../../src/features/auth/components';
+import { AuthLogo, LeafShape, SessionEndedNotice } from '../../src/features/auth/components';
 import { colors, font, radius, shadows, spacing } from '../../src/theme';
 
 export default function WelcomeScreen() {
@@ -58,6 +58,7 @@ export default function WelcomeScreen() {
       </View>
 
       <View style={styles.actions}>
+        <SessionEndedNotice />
         <Button
           label="Get started"
           onPress={() => router.push('/sign-up')}
