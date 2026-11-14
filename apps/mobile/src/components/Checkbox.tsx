@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     height: BOX,
     borderRadius: 4,
     borderWidth: 1.5,
-    borderColor: colors.textFaint,
+    borderColor: colors.controlBorder,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',

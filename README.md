@@ -88,6 +88,26 @@ docker run --rm -d -p 54329:5432 -e POSTGRES_PASSWORD=postgres --name lunti-pg p
 TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:54329/postgres pytest -rs
 ```
 
+**Isolated-test mode** (`app/core/isolation.py`). The settings fall back to `apps/api/.env`,
+which holds the live database URL. So the test suite switches on `LUNTI_ISOLATED_TEST=1`
+before importing the app, and any test server (emulator or integration checks) must do the same:
+
+- `DATABASE_URL` must be set in the process environment before the app is imported (no
+  fallback to `.env`);
+- only hosts on a unix socket, `localhost`, `127.0.0.1` or `::1` (or listed in
+  `LUNTI_ISOLATED_ALLOWED_HOSTS`) and databases named `lunti_test_*` are accepted;
+- every new connection asks the server which database it is and requires the marker comment
+  the test harness puts on the databases it creates (`conftest.create_database`).
+
+Anything else fails at startup or on connect. Without the flag nothing changes, so normal
+development and production start as before.
+
+```bash
+# e.g. an emulator test server on a throwaway database created by conftest.create_database:
+LUNTI_ISOLATED_TEST=1 DATABASE_URL=postgresql://lunti_migrator:...@localhost:54329/lunti_test_abc \
+  OCR_PROVIDER=fixture RECEIPT_STORAGE=local SCHEDULER_ENABLED=false uvicorn app.main:app
+```
+
 ### Seed data (synthetic)
 
 `scripts/seed.py` adds ~8 weeks of synthetic purchases, products and budgets for one user.

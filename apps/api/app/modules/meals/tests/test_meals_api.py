@@ -358,3 +358,162 @@ def test_only_admins_add_catalog_recipes(db_client: TestClient, user, admin_engi
     assert bad.status_code == 422
     with admin_engine.begin() as conn:
         conn.execute(text("delete from recipes where name = 'ZZ Test lumpia'"))
+
+
+# ---------- Phase 8C: recipe details, amounts and the grocery list ----------
+
+
+def recipe_id_by_name(client: TestClient, headers, name: str) -> str:  # noqa: ANN001
+    return next(r["id"] for r in recs(client, headers)["items"] if r["name"] == name)
+
+
+def shopping_items(client: TestClient, headers) -> list[dict]:  # noqa: ANN001
+    return client.get("/api/v1/shopping-lists", headers=headers).json()[0]["items"]
+
+
+def test_recipe_detail_has_steps_times_and_staples(db_client: TestClient, user) -> None:
+    headers, cats, _ = user
+    confirm(db_client, headers, cats, [("Eggs", "6", "8.00", "pcs")])
+    rid = recipe_id_by_name(db_client, headers, "Scrambled eggs with tomatoes")
+    detail = db_client.get(f"/api/v1/recipes/{rid}", headers=headers).json()
+    assert (detail["prep_time_minutes"], detail["cook_time_minutes"]) == (3, 7)
+    assert detail["total_time_minutes"] == 10  # same total as the 0003 catalog
+    assert len(detail["steps"]) == 3 and all(s.strip() for s in detail["steps"])
+    assert "Cooking oil" in detail["staples"]
+    # Staples are not ingredients: matching is unchanged (eggs of eggs/tomato/onion).
+    assert detail["total_count"] == 3 and detail["match_pct"] == 33
+    eggs = next(i for i in detail["ingredients"] if i["name"] == "eggs")
+    assert (eggs["quantity"], eggs["unit"]) == ("4.000", "pcs")
+    assert (eggs["have_quantity"], eggs["have_unit"], eggs["have_confirmed"]) == (
+        "6.000",
+        "pcs",
+        False,  # an estimate from the receipt
+    )
+    onion = next(i for i in detail["ingredients"] if i["name"] == "onion")
+    assert onion["have_quantity"] is None and onion["not_enough"] is False
+
+
+def test_too_little_in_the_pantry_is_flagged_not_enough(db_client: TestClient, user) -> None:
+    headers, cats, _ = user
+    confirm(db_client, headers, cats, [("Eggs", "2", "8.00", "pcs"), ("Tomato", "2", "12", "pcs")])
+    eggs_row = item(pantry(db_client, headers), "Eggs")
+    db_client.patch(f"{PANTRY}/{eggs_row['id']}", headers=headers, json={"confirmed": True})
+    rid = recipe_id_by_name(db_client, headers, "Scrambled eggs with tomatoes")
+    detail = db_client.get(f"/api/v1/recipes/{rid}", headers=headers).json()
+    eggs = next(i for i in detail["ingredients"] if i["name"] == "eggs")
+    assert (eggs["status"], eggs["not_enough"]) == ("missing", True)  # needs 4, has 2
+    assert (eggs["have_quantity"], eggs["have_confirmed"]) == ("2.000", True)
+
+
+def test_add_missing_uses_recipe_quantities_units_and_same_unit_prices(
+    db_client: TestClient, user
+) -> None:
+    headers, cats, _ = user
+    # Bought before, now used up: chicken per kg (same unit as adobo), soy sauce per bottle.
+    confirm(
+        db_client,
+        headers,
+        cats,
+        [("Chicken", "1", "210.00", "kg"), ("Soy sauce", "1", "45.00", "bottle")],
+    )
+    for name in ("Chicken", "Soy sauce"):
+        row = item(pantry(db_client, headers), name)
+        db_client.patch(f"{PANTRY}/{row['id']}", headers=headers, json={"quantity": "0"})
+    confirm(
+        db_client,
+        headers,
+        cats,
+        [
+            ("Vinegar", "1", "30", "bottle"),
+            ("Garlic", "1", "30", "head"),
+            ("Onion", "2", "10", "pcs"),
+        ],
+    )  # noqa: E501
+    rid = recipe_id_by_name(db_client, headers, "Chicken adobo")
+
+    result = db_client.post(f"/api/v1/recipes/{rid}/add-missing", headers=headers).json()
+    added = {i["name"]: i for i in result["added"]}
+    assert set(added) == {"Chicken", "Soy sauce"}
+    chicken, soy = added["Chicken"], added["Soy sauce"]
+    assert (chicken["quantity"], chicken["unit"], chicken["est_price"]) == ("1.000", "kg", "210.00")
+    assert chicken["line_estimate"] == "210.00"
+    # 120 ml needed, last bought per bottle: no price per ml is guessed.
+    assert (soy["quantity"], soy["unit"], soy["est_price"]) == ("120.000", "ml", None)
+
+
+def test_add_missing_keeps_a_covering_item_and_the_users_edits(db_client: TestClient, user) -> None:
+    headers, cats, _ = user
+    confirm(db_client, headers, cats, [("Eggs", "6", "8.00", "pcs")])
+    list_id = db_client.get("/api/v1/shopping-lists", headers=headers).json()[0]["id"]
+    # The user already listed a branded onion pack with their own amount.
+    manual = db_client.post(
+        f"/api/v1/shopping-lists/{list_id}/items",
+        headers=headers,
+        json={"name": "Red onions", "quantity": "3", "unit": "pack"},
+    )
+    assert manual.status_code == 201, manual.text
+    rid = recipe_id_by_name(db_client, headers, "Scrambled eggs with tomatoes")
+
+    result = db_client.post(f"/api/v1/recipes/{rid}/add-missing", headers=headers).json()
+    assert [i["name"] for i in result["added"]] == ["Tomato"]
+    assert result["already_on_list"] == ["Red onions"]
+    tomato = result["added"][0]
+    assert (tomato["quantity"], tomato["unit"]) == ("2.000", "pcs")
+    items = {i["name"]: i for i in shopping_items(db_client, headers)}
+    assert set(items) == {"Red onions", "Tomato"}  # no duplicate onion
+    onions = items["Red onions"]
+    assert (onions["quantity"], onions["unit"], onions["source"]) == ("3.000", "pack", "manual")
+
+
+def test_a_bought_item_does_not_block_adding_it_again(db_client: TestClient, user) -> None:
+    headers, cats, _ = user
+    confirm(db_client, headers, cats, [("Eggs", "6", "8.00", "pcs")])
+    rid = recipe_id_by_name(db_client, headers, "Scrambled eggs with tomatoes")
+    first = db_client.post(f"/api/v1/recipes/{rid}/add-missing", headers=headers).json()
+    list_id = db_client.get("/api/v1/shopping-lists", headers=headers).json()[0]["id"]
+    for added in first["added"]:
+        db_client.patch(
+            f"/api/v1/shopping-lists/{list_id}/items/{added['id']}",
+            headers=headers,
+            json={"is_purchased": True},
+        )
+    again = db_client.post(f"/api/v1/recipes/{rid}/add-missing", headers=headers).json()
+    assert sorted(i["name"] for i in again["added"]) == ["Onion", "Tomato"]
+
+
+def test_admin_recipe_with_steps_and_cook_time(
+    db_client: TestClient, user, admin_engine: Engine
+) -> None:
+    headers, _, user_id = user
+    with admin_engine.begin() as conn:
+        conn.execute(text("update profiles set role = 'admin' where user_id = :u"), {"u": user_id})
+    body = {
+        "name": "ZZ Test lumpia",
+        "servings": 4,
+        "prep_time_minutes": 25,
+        "cook_time_minutes": 15,
+        "ingredients": [{"name": "lumpia wrapper", "quantity": "1", "unit": "pack"}],
+        "steps": ["Fill the wrappers.", "Fry until golden."],
+        "staples": ["Cooking oil"],
+    }
+    try:
+        created = db_client.post("/api/v1/admin/recipes", headers=headers, json=body)
+        assert created.status_code == 201, created.text
+        out = created.json()
+        assert (out["total_time_minutes"], out["steps"], out["staples"]) == (
+            40,
+            ["Fill the wrappers.", "Fry until golden."],
+            ["Cooking oil"],
+        )
+        too_many = {**body, "name": "ZZ Test 2", "steps": ["x"] * 31}
+        assert (
+            db_client.post("/api/v1/admin/recipes", headers=headers, json=too_many).status_code
+            == 422
+        )  # noqa: E501
+        blank = {**body, "name": "ZZ Test 3", "steps": ["  "]}
+        assert (
+            db_client.post("/api/v1/admin/recipes", headers=headers, json=blank).status_code == 422
+        )  # noqa: E501
+    finally:
+        with admin_engine.begin() as conn:
+            conn.execute(text("delete from recipes where name like 'ZZ Test%'"))

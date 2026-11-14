@@ -21,6 +21,7 @@ from sqlalchemy import DateTime, Engine, MetaData, create_engine, event, exc, fu
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
+from app.core import isolation
 from app.core.auth import CurrentUser, CurrentUserDep
 from app.core.config import settings
 from app.core.errors import ApiError
@@ -60,6 +61,9 @@ class IdMixin:
 
 @lru_cache
 def get_engine() -> Engine:
+    if isolation.isolated_mode():
+        # Test servers and the test suite: refuse a .env fallback or a non-test database.
+        isolation.check_settings(database_url=settings.database_url)
     if not settings.database_url:
         raise ApiError(503, "service-unavailable", "The database is not configured.")
     return make_engine(settings.sqlalchemy_database_url)
@@ -93,7 +97,8 @@ def make_engine(url: str) -> Engine:
         },
     )
     event.listen(engine, "checkout", ping_on_checkout)
-    return engine
+    # No-op unless LUNTI_ISOLATED_TEST=1; then only marked lunti_test_* databases connect.
+    return isolation.guard_engine(engine)
 
 
 def ping_on_checkout(dbapi_connection: psycopg.Connection, _record: object, _proxy: object) -> None:

@@ -11,3 +11,6 @@ jest.mock('expo-file-system', () => require('./test-utils/fakeCamera').fileSyste
 // No push service in Jest: permission is denied unless a test changes it.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('expo-notifications', () => require('./test-utils/fakeNotifications').notificationsModuleMock);
+// Connectivity is simulated (test-utils/fakeNetInfo.ts); online unless a test changes it.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+jest.mock('@react-native-community/netinfo', () => require('./test-utils/fakeNetInfo').netInfoModuleMock);

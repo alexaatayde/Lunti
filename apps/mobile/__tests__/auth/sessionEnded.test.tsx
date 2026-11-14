@@ -4,7 +4,8 @@ import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testi
 
 import { queryClient } from '../../src/api/queryClient';
 import { useSessionStore } from '../../src/stores/session';
-import { mockApi } from '../../test-utils/fakeApi';
+import { ME, mockApi } from '../../test-utils/fakeApi';
+import { resetNetworkState, setNetworkState } from '../../test-utils/fakeNetInfo';
 import {
   fakeAuth,
   fakeSession,
@@ -116,4 +117,36 @@ describe('session ended', () => {
       queryClient.setDefaultOptions(defaults);
     }
   });
+
+  // Phase 8C: losing the connection must never end the session, and coming back online
+  // refetches on its own (no tap on Try again).
+  it('stays signed in while offline and recovers by itself when the connection returns', async () => {
+    let online = false;
+    const fakeServer = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (...args: unknown[]) => {
+      if (!online) throw new TypeError('Network request failed');
+      return fakeServer(...args);
+    });
+    try {
+      await act(async () => setNetworkState({ isConnected: false }));
+      const router = await renderRouter(appDir, { initialUrl: '/profile' });
+      expect(
+        await screen.findByText("Can't reach Lunti. Check your connection and try again.", {}, { timeout: 4000 }),
+      ).toBeOnTheScreen();
+      expect(screen.getByRole('alert', { name: /You're offline/ })).toBeOnTheScreen();
+      expect(router.getPathname()).toBe('/profile');
+      expect(fakeAuth.signOut).not.toHaveBeenCalled();
+      expect(useSessionStore.getState().session).not.toBeNull();
+
+      online = true;
+      await act(async () => setNetworkState({ isConnected: true }));
+      expect(await screen.findByText(ME.full_name!, {}, { timeout: 4000 })).toBeOnTheScreen();
+      expect(screen.queryByRole('alert', { name: /You're offline/ })).toBeNull();
+      expect(router.getPathname()).toBe('/profile');
+      expect(fakeAuth.signOut).not.toHaveBeenCalled();
+    } finally {
+      resetNetworkState();
+      await act(async () => setNetworkState({ isConnected: true }));
+    }
+  }, 20_000);
 });

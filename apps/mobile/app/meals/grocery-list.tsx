@@ -316,7 +316,7 @@ function ItemGroup({
               accessibilityRole="checkbox"
               accessibilityState={{ checked: item.is_purchased }}
               accessibilityLabel={`${item.name}, ${item.is_purchased ? 'picked up' : 'to buy'}`}
-              hitSlop={6}
+              hitSlop={8} // 28 dp box + 8 on each side = 44 dp touch target
               style={[styles.check, item.is_purchased && styles.checkOn]}
             >
               {item.is_purchased ? <CheckIcon size={16} color={colors.textOnPrimary} /> : null}
@@ -324,7 +324,7 @@ function ItemGroup({
             <Pressable
               onPress={() => onEdit(item)}
               accessibilityRole="button"
-              accessibilityLabel={`Edit ${item.name}`}
+              accessibilityLabel={`Edit ${item.name}, ${quantityText(item)}${label ? `, ${label.toLowerCase()}` : ''}`}
               style={({ pressed }) => [styles.itemBody, pressed && styles.pressed]}
             >
               <View style={styles.flex}>
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: colors.textFaint,
+    borderColor: colors.controlBorder,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,

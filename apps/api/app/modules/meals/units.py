@@ -53,6 +53,12 @@ def convert(quantity: Decimal, unit: str | None, to_unit: str | None) -> Decimal
     return quantity * a[1] / b[1]
 
 
+def same_unit(a: str | None, b: str | None) -> bool:
+    """Both known and the same unit (aliases count: "kgs" = "kg"); "g" vs "kg" is not."""
+    ca, cb = canonical(a), canonical(b)
+    return ca is not None and ca == cb
+
+
 def compare(have: Decimal, have_unit: str | None, need: Decimal, need_unit: str | None) -> Amount:
     converted = convert(have, have_unit, need_unit)
     if converted is None:

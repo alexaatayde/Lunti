@@ -1,4 +1,5 @@
-/** "Cook what's here" card (Meals.html), without the photo or savings claim (no data). */
+/** "Cook what's here" card (Meals.html): photo placeholder (no licensed photos yet), no savings
+ * claim (no data). */
 import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
@@ -7,6 +8,7 @@ import { AppText, Badge, Button, Card, ClockIcon } from '../../components';
 import { showToast } from '../../stores/toast';
 import { colors, spacing } from '../../theme';
 import { missingText, recipeMeta, usesText } from './display';
+import { RecipePhoto } from './RecipePhoto';
 
 export function addMissingMessage(added: number, already: number): string {
   if (added === 0 && already === 0) return 'You already have everything for this.';
@@ -34,6 +36,7 @@ export function RecipeCard({ recipe }: { recipe: RecipeSummary }) {
   const add = useAddMissing();
   return (
     <Card style={styles.card}>
+      <RecipePhoto height={112} />
       <View style={styles.top}>
         <View style={styles.meta}>
           <ClockIcon size={16} color={colors.textMuted} />

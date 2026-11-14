@@ -2,6 +2,7 @@ import {
   answeredText,
   dueText,
   isOpen,
+  notificationsBackLabel,
   notificationTone,
   quantityText,
   sourceLabel,
@@ -81,4 +82,10 @@ it('shows relative times and answered suggestions', () => {
   expect(isOpen(s())).toBe(true);
   expect(answeredText(s({ status: 'added' }))).toBe('Added to your list');
   expect(answeredText(s({ status: 'pending' }))).toBeNull();
+});
+
+it('labels the Notifications Back link with where it returns to', () => {
+  expect(notificationsBackLabel('profile')).toBe('Profile');
+  expect(notificationsBackLabel('home')).toBe('Home');
+  expect(notificationsBackLabel(undefined)).toBe('Home'); // direct link: Back lands on Home
 });

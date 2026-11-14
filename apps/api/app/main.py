@@ -6,6 +6,7 @@ from fastapi.routing import APIRoute
 from sqlalchemy import text
 
 import app.models  # noqa: F401  (registers every table, so foreign keys resolve at runtime)
+from app.core import isolation
 from app.core.body_limit import BodySizeLimitMiddleware
 from app.core.config import settings
 from app.core.db import get_engine
@@ -31,6 +32,13 @@ def _operation_id(route: APIRoute) -> str:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    if isolation.isolated_mode():
+        # Emulator / integration test servers: fail startup unless the database really is a
+        # marked test database (app/core/isolation.py). Normal startup skips this.
+        isolation.check_settings(database_url=settings.database_url)
+        if settings.database_url:
+            with get_engine().connect():
+                pass
     # Scheduled jobs (AGENTS.md §7.6) run in this process when SCHEDULER_ENABLED=true.
     scheduler = start_scheduler()
     try:

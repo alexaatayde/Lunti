@@ -17,6 +17,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -53,11 +54,26 @@ class Recipe(IdMixin, TimestampMixin, Base):
         CheckConstraint("servings > 0", name="servings_positive"),
         CheckConstraint("prep_time_minutes >= 0", name="prep_time_non_negative"),
         CheckConstraint("char_length(btrim(name)) between 1 and 120", name="name_length"),
+        CheckConstraint("cook_time_minutes >= 0", name="cook_time_non_negative"),
+        CheckConstraint("cardinality(steps) <= 30", name="steps_count"),
+        CheckConstraint("cardinality(staples) <= 20", name="staples_count"),
     )
 
     name: Mapped[str] = mapped_column(Text, nullable=False)
     servings: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    # Preparation only since 0005 (before, the whole time); total = prep + cook.
     prep_time_minutes: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    cook_time_minutes: Mapped[int] = mapped_column(
+        SmallInteger, server_default=text("0"), nullable=False
+    )
+    # Numbered cooking steps, in order (migration 0005).
+    steps: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), server_default=text("'{}'::text[]"), nullable=False
+    )
+    # Basics the steps use that aren't matched against the pantry (water, salt, oil…).
+    staples: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), server_default=text("'{}'::text[]"), nullable=False
+    )
 
 
 class RecipeIngredient(IdMixin, TimestampMixin, Base):

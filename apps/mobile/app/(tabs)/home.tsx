@@ -59,7 +59,9 @@ export default function HomeScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <AppHeader
         onAvatarPress={() => router.push('/profile')}
-        onBellPress={() => router.push('/notifications')}
+        onBellPress={() =>
+          router.push({ pathname: '/notifications', params: { from: 'home' } })
+        }
         unreadCount={notifications.data?.unread_count ?? 0}
       />
       <ScrollView
@@ -326,7 +328,7 @@ const styles = StyleSheet.create({
   categoryRow: { gap: spacing.sm },
   categoryLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   categoryAmount: { ...font(800), fontSize: 15, color: colors.text },
-  share: { ...font(500), fontSize: 11, color: colors.textFaint, minWidth: 30, textAlign: 'right' },
+  share: { ...font(500), fontSize: 11, color: colors.textMuted, minWidth: 30, textAlign: 'right' },
   // Home.html: 6 px bar in the category's color.
   shareTrack: {
     height: 6,

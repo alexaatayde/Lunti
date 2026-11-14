@@ -290,7 +290,7 @@ function ExpenseForm({ existing }: { existing?: TransactionDetail }) {
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
                 placeholder="Where did you buy it?"
-                placeholderTextColor={colors.textFaint}
+                placeholderTextColor={colors.textMuted}
                 accessibilityLabel="Store"
                 maxLength={120}
                 style={styles.input}
@@ -344,7 +344,7 @@ function ExpenseForm({ existing }: { existing?: TransactionDetail }) {
                 onChangeText={field.onChange}
                 onBlur={field.onBlur}
                 placeholder="Optional"
-                placeholderTextColor={colors.textFaint}
+                placeholderTextColor={colors.textMuted}
                 accessibilityLabel="Note"
                 maxLength={500}
                 style={styles.input}
@@ -495,7 +495,7 @@ const styles = StyleSheet.create({
   rowValue: { flex: 1, minWidth: 0 },
   input: { ...font(500), fontSize: 15, color: colors.text, paddingVertical: spacing.md },
   value: { ...font(500), fontSize: 15, color: colors.text },
-  placeholder: { ...font(500), fontSize: 15, color: colors.textFaint },
+  placeholder: { ...font(500), fontSize: 15, color: colors.textMuted },
   center: { textAlign: 'center', marginTop: spacing.xs },
   items: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg },
   itemsTile: {

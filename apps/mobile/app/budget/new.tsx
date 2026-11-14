@@ -356,7 +356,7 @@ function BudgetForm({ existing }: { existing?: BudgetStatus }) {
                 keyboardType="decimal-pad"
                 inputMode="decimal"
                 placeholder="0.00"
-                placeholderTextColor={colors.textFaint}
+                placeholderTextColor={colors.textMuted}
                 accessibilityLabel="Spending limit in pesos"
                 style={styles.limitInput}
               />
@@ -509,7 +509,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   selectText: { ...font(500), fontSize: 16, color: colors.text, flexShrink: 1 },
-  placeholder: { ...font(500), fontSize: 16, color: colors.textFaint },
+  placeholder: { ...font(500), fontSize: 16, color: colors.textMuted },
   pressed: { opacity: 0.8 },
   inputError: { borderWidth: 1.5, borderColor: colors.dangerText },
   dates: { flexDirection: 'row', gap: spacing.md },

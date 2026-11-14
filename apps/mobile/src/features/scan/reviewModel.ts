@@ -165,5 +165,17 @@ export function flagFor(flags: ReceiptFlag[], field: ReceiptFlag['field']): Rece
   return flags.find((f) => f.field === field);
 }
 
+/**
+ * A field's "check this" hint, until the user has set the value themselves: once they've
+ * picked it, the hint about the receipt's reading no longer applies (Phase 8C).
+ */
+export function hintFor(
+  flags: ReceiptFlag[],
+  field: ReceiptFlag['field'],
+  editedByUser: boolean,
+): ReceiptFlag | undefined {
+  return editedByUser ? undefined : flagFor(flags, field);
+}
+
 /** Confidence chip wording: below 80 % asks the user to check the field. */
 export const LOW_CONFIDENCE_PCT = 80;

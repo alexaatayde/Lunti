@@ -28,8 +28,56 @@ export const INGREDIENT_STATUS: Record<Ingredient['status'], string> = {
   missing: 'Need to buy',
 };
 
-export function recipeMeta(r: Pick<RecipeSummary, 'prep_time_minutes' | 'servings'>): string {
-  return `${r.prep_time_minutes} min · ${r.servings} ${r.servings === 1 ? 'serving' : 'servings'}`;
+/** Status words; "Not enough" when the pantry has some, but less than the recipe needs. */
+export function ingredientStatusText(ing: Pick<Ingredient, 'status' | 'not_enough'>): string {
+  return ing.status === 'missing' && ing.not_enough ? 'Not enough' : INGREDIENT_STATUS[ing.status];
+}
+
+/**
+ * What the pantry has for this ingredient, saying whether it's an estimate:
+ * "You have about 2 pcs (estimate)" / "You have 2 pcs" / null when nothing matched.
+ */
+export function haveText(
+  ing: Pick<Ingredient, 'have_quantity' | 'have_unit' | 'have_confirmed'>,
+): string | null {
+  if (ing.have_quantity === null || ing.have_quantity === undefined) return null;
+  const amount = amountText(ing.have_quantity, ing.have_unit);
+  return ing.have_confirmed ? `You have ${amount}` : `You have about ${amount} (estimate)`;
+}
+
+function minutes(n: number): string {
+  if (n < 60) return `${n} min`;
+  const h = Math.floor(n / 60);
+  const m = n % 60;
+  return m ? `${h} hr ${m} min` : `${h} hr`;
+}
+
+export function servingsText(servings: number): string {
+  return `${servings} ${servings === 1 ? 'serving' : 'servings'}`;
+}
+
+type Times = Pick<RecipeSummary, 'prep_time_minutes' | 'cook_time_minutes' | 'total_time_minutes'>;
+
+/** prep + cook; an API from before migration 0005 sends only prep_time (the whole time). */
+function totalMinutes(r: Partial<Times> & Pick<Times, 'prep_time_minutes'>): number {
+  return r.total_time_minutes ?? r.prep_time_minutes;
+}
+
+/** Card meta: total time (prep + cook) and servings. */
+export function recipeMeta(
+  r: Partial<Times> & Pick<RecipeSummary, 'prep_time_minutes' | 'servings'>,
+): string {
+  return `${minutes(totalMinutes(r))} · ${servingsText(r.servings)}`;
+}
+
+/** [label, value] rows for the recipe detail; cooking time only when the recipe has one. */
+export function timeRows(r: Partial<Times> & Pick<Times, 'prep_time_minutes'>): [string, string][] {
+  if (!r.cook_time_minutes) return [['Total time', minutes(totalMinutes(r))]];
+  return [
+    ['Prep', minutes(r.prep_time_minutes)],
+    ['Cook', minutes(r.cook_time_minutes)],
+    ['Total', minutes(totalMinutes(r))],
+  ];
 }
 
 export function usesText(r: RecipeSummary): string {

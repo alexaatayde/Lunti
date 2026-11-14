@@ -57,6 +57,7 @@ import {
   LOW_CONFIDENCE_PCT,
   draftToForm,
   flagFor,
+  hintFor,
   formToConfirm,
   newItemKey,
   reviewSchema,
@@ -166,6 +167,8 @@ function ReviewForm({
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   useHardwareBack(() => setConfirmDiscard(true));
   const [formError, setFormError] = useState<string | null>(null);
+  // The date hint goes away once the user picks a date (Reset changes brings it back).
+  const [dateEdited, setDateEdited] = useState(false);
 
   const flags = receipt.flags;
   const category =
@@ -288,7 +291,7 @@ function ReviewForm({
           </View>
           <View style={styles.summaryRight}>
             <AppText style={styles.summaryTotal}>{formatMoney(values.total || '')}</AppText>
-            <AppText variant="small" color={colors.textFaint}>
+            <AppText variant="small" color={colors.textMuted}>
               receipt total
             </AppText>
           </View>
@@ -305,6 +308,7 @@ function ReviewForm({
             label="Reset changes"
             onPress={() => {
               reset(initial);
+              setDateEdited(false);
               clearErrors();
               setFormError(null);
             }}
@@ -339,7 +343,7 @@ function ReviewForm({
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
                   placeholder="Store name"
-                  placeholderTextColor={colors.textFaint}
+                  placeholderTextColor={colors.textMuted}
                   accessibilityLabel="Store"
                   maxLength={120}
                   style={styles.input}
@@ -350,11 +354,14 @@ function ReviewForm({
           <FieldRow
             label="Date"
             divider
-            flag={flagFor(flags, 'occurred_at')}
+            flag={hintFor(flags, 'occurred_at', dateEdited)}
             error={errors.occurredAt?.message}
             onPress={async () => {
               const picked = await pickDateTime({ value: occurredAt, maximumDate: new Date() });
-              if (picked) setValue('occurredAt', picked, { shouldValidate: true });
+              if (picked) {
+                setValue('occurredAt', picked, { shouldValidate: true });
+                setDateEdited(true);
+              }
             }}
             accessibilityLabel={`Date, ${formatRelativeDay(occurredAt)} ${formatTime(occurredAt)}. Change`}
             trailing={<CalendarIcon size={20} color={colors.textFaint} />}
@@ -393,7 +400,7 @@ function ReviewForm({
                   onBlur={field.onBlur}
                   keyboardType="decimal-pad"
                   placeholder="0.00"
-                  placeholderTextColor={colors.textFaint}
+                  placeholderTextColor={colors.textMuted}
                   accessibilityLabel="Receipt total in pesos"
                   style={[styles.input, styles.money]}
                 />
@@ -411,7 +418,7 @@ function ReviewForm({
                   onBlur={field.onBlur}
                   keyboardType="decimal-pad"
                   placeholder="Senior, PWD or promo (optional)"
-                  placeholderTextColor={colors.textFaint}
+                  placeholderTextColor={colors.textMuted}
                   accessibilityLabel="Receipt discount in pesos"
                   style={styles.input}
                 />
@@ -436,7 +443,7 @@ function ReviewForm({
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
                   placeholder="Optional"
-                  placeholderTextColor={colors.textFaint}
+                  placeholderTextColor={colors.textMuted}
                   accessibilityLabel="Note"
                   maxLength={500}
                   style={styles.input}
@@ -900,7 +907,7 @@ const styles = StyleSheet.create({
   input: { ...font(500), fontSize: 15, color: colors.text, paddingVertical: spacing.sm },
   money: { ...font(700) },
   value: { ...font(500), fontSize: 15, color: colors.text },
-  placeholder: { ...font(500), fontSize: 15, color: colors.textFaint },
+  placeholder: { ...font(500), fontSize: 15, color: colors.textMuted },
   inlineFlag: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   itemsHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm },
   itemRow: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: spacing.sm },

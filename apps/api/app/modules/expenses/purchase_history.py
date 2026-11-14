@@ -109,10 +109,21 @@ def daily_totals(db: Session, user: CurrentUser, start: date, end: date) -> dict
 
 def last_unit_prices(db: Session, user: CurrentUser, product_ids: set[UUID]) -> dict[UUID, Decimal]:
     """The unit price the user paid most recently for each product (for list estimates)."""
+    return {p: price for p, (price, _) in last_unit_purchases(db, user, product_ids).items()}
+
+
+def last_unit_purchases(
+    db: Session, user: CurrentUser, product_ids: set[UUID]
+) -> dict[UUID, tuple[Decimal, str | None]]:
+    """(unit price, unit of that line) of each product's most recent purchase."""
     if not product_ids:
         return {}
     rows = db.execute(
-        select(TransactionLineItem.product_id, TransactionLineItem.unit_price)
+        select(
+            TransactionLineItem.product_id,
+            TransactionLineItem.unit_price,
+            TransactionLineItem.unit,
+        )
         .join(Transaction, Transaction.id == TransactionLineItem.transaction_id)
         .where(Transaction.user_id == user.id, TransactionLineItem.product_id.in_(product_ids))
         .ext(distinct_on(TransactionLineItem.product_id))
@@ -122,7 +133,7 @@ def last_unit_prices(db: Session, user: CurrentUser, product_ids: set[UUID]) -> 
             TransactionLineItem.id.desc(),
         )
     )
-    return {p: periods.money(price) for p, price in rows}
+    return {p: (periods.money(price), unit) for p, price, unit in rows}
 
 
 @dataclass(frozen=True)

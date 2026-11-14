@@ -20,9 +20,13 @@ import { isSupabaseConfigured } from '../src/lib/supabase';
 import { selectSignedIn, useSessionStore } from '../src/stores/session';
 import { colors } from '../src/theme';
 import { usePushNotifications } from '../src/features/notifications/push';
+import { OfflineBoundary } from '../src/features/connectivity/OfflineBanner';
+import { installConnectivity } from '../src/lib/connectivity';
 
 // Keep the native splash up until fonts and the saved session have loaded.
 SplashScreen.preventAutoHideAsync();
+// Refetch on reconnect and when the app returns to the foreground.
+installConnectivity();
 
 export const unstable_settings = {
   // Deep links into stack screens keep the tabs underneath, so Back lands on a tab.
@@ -58,28 +62,30 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-        {/* Every app screen must be listed here: Expo Router leaves unlisted routes public. */}
-        <Stack.Protected guard={signedIn} redirectTo="/welcome">
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="(modals)" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="budget/new" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="notifications" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="profile" />
-          <Stack.Screen name="transactions/[id]" />
-          <Stack.Screen name="meals/pantry" />
-          <Stack.Screen name="meals/grocery-list" />
-          <Stack.Screen name="meals/recipe/[id]" />
-          <Stack.Screen name="dev/components" />
-        </Stack.Protected>
-        <Stack.Protected guard={!signedIn} redirectTo="/home">
-          <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
-        </Stack.Protected>
-        {/* Opened from the password-reset email whether or not someone is signed in. */}
-        <Stack.Screen name="reset-password" options={{ animation: 'fade' }} />
-        {/* index only redirects, based on the session. */}
-        <Stack.Screen name="index" />
-      </Stack>
+      <OfflineBoundary>
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+          {/* Every app screen must be listed here: Expo Router leaves unlisted routes public. */}
+          <Stack.Protected guard={signedIn} redirectTo="/welcome">
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="(modals)" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="budget/new" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="notifications" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="profile" />
+            <Stack.Screen name="transactions/[id]" />
+            <Stack.Screen name="meals/pantry" />
+            <Stack.Screen name="meals/grocery-list" />
+            <Stack.Screen name="meals/recipe/[id]" />
+            <Stack.Screen name="dev/components" />
+          </Stack.Protected>
+          <Stack.Protected guard={!signedIn} redirectTo="/home">
+            <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
+          </Stack.Protected>
+          {/* Opened from the password-reset email whether or not someone is signed in. */}
+          <Stack.Screen name="reset-password" options={{ animation: 'fade' }} />
+          {/* index only redirects, based on the session. */}
+          <Stack.Screen name="index" />
+        </Stack>
+      </OfflineBoundary>
       {signedIn ? <ToastHost /> : null}
     </QueryClientProvider>
   );

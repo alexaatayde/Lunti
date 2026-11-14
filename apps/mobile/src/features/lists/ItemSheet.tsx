@@ -50,7 +50,7 @@ export function ItemSheet({
   onSave: (body: ItemCreate) => Promise<void>;
   onDelete?: () => void;
 }) {
-  const { control, handleSubmit, setError, formState } = useForm<ItemForm>({
+  const { control, handleSubmit, setError, setFocus, formState } = useForm<ItemForm>({
     resolver: zodResolver(itemSchema),
     defaultValues: {
       name: item?.name ?? '',
@@ -70,17 +70,32 @@ export function ItemSheet({
     }
   });
 
+  // Keyboard order: Item → Quantity → Unit → Price → submit.
+  const NEXT: Record<keyof ItemForm, keyof ItemForm | null> = {
+    name: 'quantity',
+    quantity: 'unit',
+    unit: 'price',
+    price: null,
+  };
   const field = (name: keyof ItemForm, label: string, extra: object = {}) => (
     <Controller
       control={control}
       name={name}
       render={({ field: f, fieldState }) => (
         <TextField
+          ref={f.ref}
           label={label}
           value={f.value}
           onChangeText={f.onChange}
           onBlur={f.onBlur}
           error={fieldState.error?.message}
+          returnKeyType={NEXT[name] ? 'next' : 'done'}
+          submitBehavior={NEXT[name] ? 'submit' : 'blurAndSubmit'}
+          onSubmitEditing={() => {
+            const next = NEXT[name];
+            if (next) setFocus(next);
+            else void submit();
+          }}
           {...extra}
         />
       )}

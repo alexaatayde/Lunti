@@ -5,10 +5,20 @@ server where the user can CREATE DATABASE and CREATE ROLE (a local server or the
 container — never Supabase). Each test session creates a throwaway database, loads
 tests/supabase_stub.sql, runs the Alembic migrations, and drops the database afterwards.
 Without TEST_DATABASE_URL the database tests are skipped.
+
+Isolated-test mode (app/core/isolation.py) is switched on here, BEFORE the app is imported:
+the settings would otherwise fill DATABASE_URL from apps/api/.env (the live database). Tests
+only ever reach marked lunti_test_* databases on an approved host; anything else raises.
 """
 
-import json
 import os
+
+os.environ["LUNTI_ISOLATED_TEST"] = "1"
+# Explicitly empty unless the shell set one: pydantic then never reads .env's live URL, and a
+# URL exported by hand is still checked by the isolation guard.
+os.environ.setdefault("DATABASE_URL", "")
+
+import json
 import time
 import uuid
 from collections.abc import Callable, Iterator
@@ -25,6 +35,7 @@ from sqlalchemy import Engine, create_engine, make_url, text
 from sqlalchemy.orm import Session
 
 from alembic import command
+from app.core import isolation
 from app.core.auth import TokenVerifier, get_token_verifier
 from app.core.config import settings, to_sqlalchemy_url
 from app.core.db import (
@@ -144,6 +155,8 @@ def _server_url() -> str:
     url = os.environ.get("TEST_DATABASE_URL", "")
     if not url:
         pytest.skip("TEST_DATABASE_URL not set: database tests skipped")
+    # A local server or the CI service container only, never Supabase.
+    isolation.check_url(to_sqlalchemy_url(url), server_level=True)
     return url
 
 
@@ -157,6 +170,7 @@ def alembic_config(url: str) -> Config:
 def create_database(server_url: str) -> ThrowawayDatabase:
     """Throwaway database with the Supabase stand-in loaded (not yet migrated)."""
     name = f"lunti_test_{uuid.uuid4().hex[:10]}"
+    isolation.check_url(to_sqlalchemy_url(server_url), server_level=True)
     server = create_engine(to_sqlalchemy_url(server_url), isolation_level="AUTOCOMMIT")
     with server.connect() as conn:
         conn.execute(
@@ -168,6 +182,7 @@ def create_database(server_url: str) -> ThrowawayDatabase:
             )
         )
         conn.execute(text(f'create database "{name}" owner {MIGRATOR}'))
+        isolation.mark_database(conn, name)  # what the isolation guard checks on connect
     server.dispose()
 
     admin_url = make_url(to_sqlalchemy_url(server_url)).set(database=name)

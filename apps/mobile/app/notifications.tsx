@@ -6,7 +6,7 @@
  * Added beyond the design (flagged for review): the notification switches at the bottom
  * (user_preferences). Profile links here instead of repeating them.
  */
-import { router, type Href } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,6 +34,7 @@ import {
 import {
   answeredText,
   isOpen,
+  notificationsBackLabel,
   notificationTone,
   timeAgo,
   type NotificationTone,
@@ -79,6 +80,8 @@ const ACTION: Record<string, string> = {
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const backLabel = notificationsBackLabel(from);
   const notifications = useNotifications();
   const markRead = useMarkNotificationRead();
   const markAll = useMarkAllNotificationsRead();
@@ -99,13 +102,13 @@ export default function NotificationsScreen() {
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/home'))}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={`Back to ${backLabel}`}
           hitSlop={8}
           style={styles.back}
         >
           <ChevronLeftIcon size={22} color={colors.text} />
           <AppText variant="body" color={colors.text}>
-            Home
+            {backLabel}
           </AppText>
         </Pressable>
         <AppText variant="cardTitle" accessibilityRole="header" style={styles.title}>
@@ -148,7 +151,7 @@ export default function NotificationsScreen() {
         ) : items.length === 0 ? (
           <EmptyState
             title="No notifications yet"
-            message="Budget alerts, restock reminders and shopping reminders will show up here."
+            message="Budget alerts, restock, shopping and meal reminders will show up here."
           />
         ) : (
           <>
@@ -244,6 +247,7 @@ const SWITCHES: { key: keyof Preferences; label: string }[] = [
   { key: 'notify_budget', label: 'Budget alerts' },
   { key: 'notify_replenishment', label: 'Restock reminders' },
   { key: 'notify_shopping', label: 'Shopping reminders' },
+  { key: 'notify_meals', label: 'Meal ideas and pantry reminders' },
 ];
 
 function PreferencesCard() {
@@ -267,9 +271,9 @@ function PreferencesCard() {
             accessibilityLabel={label}
             // Theme colors on both platforms (Android's default thumb is blue). Off and on also
             // differ by thumb position, so state never depends on color alone.
-            trackColor={{ true: colors.primary, false: colors.textFaint }}
+            trackColor={{ true: colors.primary, false: colors.controlBorder }}
             thumbColor={colors.surface}
-            ios_backgroundColor={colors.textFaint}
+            ios_backgroundColor={colors.controlBorder}
             onValueChange={(value) =>
               update.mutate(
                 { ...data, [key]: value },

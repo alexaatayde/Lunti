@@ -171,7 +171,7 @@ export default function SignInScreen() {
           />
           <View style={styles.privacyNote}>
             <LockIcon size={12} color={colors.textFaint} strokeWidth={2} />
-            <AppText variant="small" color={colors.textFaint}>
+            <AppText variant="small" color={colors.textMuted}>
               Your data is encrypted and only visible to you.
             </AppText>
           </View>

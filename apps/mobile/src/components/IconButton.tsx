@@ -29,7 +29,7 @@ const styles = StyleSheet.create({
     width: sizes.iconButton,
     height: sizes.iconButton,
     borderRadius: radius.pill,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryAction,
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: shadows.iconButton,

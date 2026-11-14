@@ -174,9 +174,29 @@ export function ingredient(overrides: Partial<Record<string, unknown>> = {}) {
     unit: 'pcs',
     status: 'available',
     pantry_item_name: 'Eggs',
+    have_quantity: '6.000',
+    have_unit: 'pcs',
+    have_confirmed: false,
+    not_enough: false,
     est_price: null,
     ...overrides,
   };
+}
+
+/** GET /recipes/{id}: a summary plus ingredients, steps and staples. */
+export function recipeDetail(overrides: Partial<Record<string, unknown>> = {}) {
+  const missing = ingredient({ name: 'onion', quantity: '1.000', unit: 'pcs', status: 'missing', pantry_item_name: null, have_quantity: null, have_unit: null, have_confirmed: null, est_price: '10.00' });
+  return recipe({
+    ingredients: [
+      ingredient(),
+      ingredient({ name: 'tomato', quantity: '2.000', status: 'missing', pantry_item_name: 'Tomato', have_quantity: '1.000', have_confirmed: true, not_enough: true }),
+      missing,
+    ],
+    missing: [missing],
+    steps: ['Dice the tomatoes and the onion.', 'Heat the oil and cook the onion.', 'Add the eggs and stir until set.'],
+    staples: ['Cooking oil', 'Salt'],
+    ...overrides,
+  });
 }
 
 export function recipe(overrides: Partial<Record<string, unknown>> = {}) {
@@ -184,12 +204,14 @@ export function recipe(overrides: Partial<Record<string, unknown>> = {}) {
     id: 'r-1',
     name: 'Scrambled eggs with tomatoes',
     servings: 2,
-    prep_time_minutes: 10,
+    prep_time_minutes: 3,
+    cook_time_minutes: 7,
+    total_time_minutes: 10,
     match_pct: 66,
     available_count: 1,
     check_amount_count: 1,
     total_count: 3,
-    missing: [ingredient({ name: 'onion', quantity: '1.000', status: 'missing', pantry_item_name: null, est_price: '10.00' })],
+    missing: [ingredient({ name: 'onion', quantity: '1.000', status: 'missing', pantry_item_name: null, have_quantity: null, have_unit: null, have_confirmed: null, est_price: '10.00' })],
     missing_cost: '10.00',
     missing_unpriced_count: 0,
     ...overrides,

@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
     minHeight: 34,
   },
   filterWithIcons: { paddingHorizontal: spacing.md },
-  filterActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  filterActive: { backgroundColor: colors.primaryAction, borderColor: colors.primaryAction },
   filterInactive: { backgroundColor: colors.surface, borderColor: colors.borderInput },
   pressed: { opacity: 0.8 },
   filterText: { fontSize: 13, lineHeight: 20 },

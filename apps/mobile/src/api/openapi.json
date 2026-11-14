@@ -4,6 +4,7 @@
       "AddMissingResult": {
         "properties": {
           "added": {
+            "description": "New items, with the recipe's quantity and unit for each ingredient.",
             "items": {
               "$ref": "#/components/schemas/ShoppingListItem"
             },
@@ -11,6 +12,7 @@
             "type": "array"
           },
           "already_on_list": {
+            "description": "Ingredients an unbought list item already covers; that item is kept as is.",
             "items": {
               "type": "string"
             },
@@ -1038,9 +1040,50 @@
             "description": "Missing only: what you last paid for one purchase of it (null = unknown).",
             "title": "Est Price"
           },
+          "have_confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "False = the pantry amount is an estimate from purchases.",
+            "title": "Have Confirmed"
+          },
+          "have_quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How much of the matched pantry item there is (null = no match).",
+            "title": "Have Quantity"
+          },
+          "have_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Have Unit"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "not_enough": {
+            "default": false,
+            "description": "Missing because the pantry has some, but less than the recipe needs.",
+            "title": "Not Enough",
+            "type": "boolean"
           },
           "pantry_item_name": {
             "anyOf": [
@@ -1055,6 +1098,7 @@
             "title": "Pantry Item Name"
           },
           "quantity": {
+            "description": "Amount the recipe needs, in `unit`.",
             "title": "Quantity",
             "type": "string"
           },
@@ -2452,6 +2496,13 @@
       "RecipeCreate": {
         "additionalProperties": false,
         "properties": {
+          "cook_time_minutes": {
+            "default": 0,
+            "maximum": 1440.0,
+            "minimum": 0.0,
+            "title": "Cook Time Minutes",
+            "type": "integer"
+          },
           "ingredients": {
             "items": {
               "$ref": "#/components/schemas/IngredientIn"
@@ -2478,6 +2529,28 @@
             "maximum": 100.0,
             "title": "Servings",
             "type": "integer"
+          },
+          "staples": {
+            "default": [],
+            "items": {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Staples",
+            "type": "array"
+          },
+          "steps": {
+            "default": [],
+            "items": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 30,
+            "title": "Steps",
+            "type": "array"
           }
         },
         "required": [
@@ -2497,6 +2570,11 @@
           },
           "check_amount_count": {
             "title": "Check Amount Count",
+            "type": "integer"
+          },
+          "cook_time_minutes": {
+            "description": "Cooking time (0 = not split from prep).",
+            "title": "Cook Time Minutes",
             "type": "integer"
           },
           "id": {
@@ -2537,6 +2615,7 @@
             "type": "string"
           },
           "prep_time_minutes": {
+            "description": "Preparation time.",
             "title": "Prep Time Minutes",
             "type": "integer"
           },
@@ -2544,8 +2623,29 @@
             "title": "Servings",
             "type": "integer"
           },
+          "staples": {
+            "description": "Basics the steps use (water, salt, oil\u2026); not matched against the pantry.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Staples",
+            "type": "array"
+          },
+          "steps": {
+            "description": "Cooking steps in order (number them from 1).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
           "total_count": {
             "title": "Total Count",
+            "type": "integer"
+          },
+          "total_time_minutes": {
+            "description": "prep + cook.",
+            "title": "Total Time Minutes",
             "type": "integer"
           }
         },
@@ -2554,6 +2654,8 @@
           "name",
           "servings",
           "prep_time_minutes",
+          "cook_time_minutes",
+          "total_time_minutes",
           "match_pct",
           "available_count",
           "check_amount_count",
@@ -2561,7 +2663,9 @@
           "missing",
           "missing_cost",
           "missing_unpriced_count",
-          "ingredients"
+          "ingredients",
+          "steps",
+          "staples"
         ],
         "title": "RecipeDetail",
         "type": "object"
@@ -2574,6 +2678,11 @@
           },
           "check_amount_count": {
             "title": "Check Amount Count",
+            "type": "integer"
+          },
+          "cook_time_minutes": {
+            "description": "Cooking time (0 = not split from prep).",
+            "title": "Cook Time Minutes",
             "type": "integer"
           },
           "id": {
@@ -2607,6 +2716,7 @@
             "type": "string"
           },
           "prep_time_minutes": {
+            "description": "Preparation time.",
             "title": "Prep Time Minutes",
             "type": "integer"
           },
@@ -2617,6 +2727,11 @@
           "total_count": {
             "title": "Total Count",
             "type": "integer"
+          },
+          "total_time_minutes": {
+            "description": "prep + cook.",
+            "title": "Total Time Minutes",
+            "type": "integer"
           }
         },
         "required": [
@@ -2624,6 +2739,8 @@
           "name",
           "servings",
           "prep_time_minutes",
+          "cook_time_minutes",
+          "total_time_minutes",
           "match_pct",
           "available_count",
           "check_amount_count",

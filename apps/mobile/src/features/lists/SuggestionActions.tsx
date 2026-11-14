@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pillPrimary: { backgroundColor: colors.primary },
+  pillPrimary: { backgroundColor: colors.primaryAction },
   pillSecondary: {
     backgroundColor: colors.surface,
     borderWidth: 1,

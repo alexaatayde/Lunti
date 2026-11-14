@@ -49,7 +49,7 @@ export function TextField({
       <View
         style={[
           styles.field,
-          { height },
+          { minHeight: height },
           right ? styles.fieldWithRight : null,
           focused && styles.focused,
           !!error && styles.errored,
@@ -61,7 +61,7 @@ export function TextField({
           ref={ref}
           accessibilityLabel={inputProps.accessibilityLabel ?? label}
           accessibilityHint={error ?? inputProps.accessibilityHint}
-          placeholderTextColor={colors.textFaint}
+          placeholderTextColor={colors.textMuted}
           cursorColor={colors.primary}
           selectionColor={colors.primary}
           onFocus={(e) => {
@@ -110,7 +110,8 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     minWidth: 0,
-    height: '100%',
+    // Fills the field's height (which grows with large system fonts).
+    alignSelf: 'stretch',
     padding: 0,
     ...font(400),
     fontSize: 15,

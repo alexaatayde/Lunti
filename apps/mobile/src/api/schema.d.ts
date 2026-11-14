@@ -657,9 +657,15 @@ export interface components {
     schemas: {
         /** AddMissingResult */
         AddMissingResult: {
-            /** Added */
+            /**
+             * Added
+             * @description New items, with the recipe's quantity and unit for each ingredient.
+             */
             added: components["schemas"]["ShoppingListItem"][];
-            /** Already On List */
+            /**
+             * Already On List
+             * @description Ingredients an unbought list item already covers; that item is kept as is.
+             */
             already_on_list: string[];
         };
         /**
@@ -1058,14 +1064,35 @@ export interface components {
              * @description Missing only: what you last paid for one purchase of it (null = unknown).
              */
             est_price: string | null;
+            /**
+             * Have Confirmed
+             * @description False = the pantry amount is an estimate from purchases.
+             */
+            have_confirmed?: boolean | null;
+            /**
+             * Have Quantity
+             * @description How much of the matched pantry item there is (null = no match).
+             */
+            have_quantity?: string | null;
+            /** Have Unit */
+            have_unit?: string | null;
             /** Name */
             name: string;
+            /**
+             * Not Enough
+             * @description Missing because the pantry has some, but less than the recipe needs.
+             * @default false
+             */
+            not_enough: boolean;
             /**
              * Pantry Item Name
              * @description The pantry item it matched.
              */
             pantry_item_name: string | null;
-            /** Quantity */
+            /**
+             * Quantity
+             * @description Amount the recipe needs, in `unit`.
+             */
             quantity: string;
             /**
              * Status
@@ -1565,6 +1592,11 @@ export interface components {
         };
         /** RecipeCreate */
         RecipeCreate: {
+            /**
+             * Cook Time Minutes
+             * @default 0
+             */
+            cook_time_minutes: number;
             /** Ingredients */
             ingredients: components["schemas"]["IngredientIn"][];
             /** Name */
@@ -1573,6 +1605,16 @@ export interface components {
             prep_time_minutes: number;
             /** Servings */
             servings: number;
+            /**
+             * Staples
+             * @default []
+             */
+            staples: string[];
+            /**
+             * Steps
+             * @default []
+             */
+            steps: string[];
         };
         /** RecipeDetail */
         RecipeDetail: {
@@ -1580,6 +1622,11 @@ export interface components {
             available_count: number;
             /** Check Amount Count */
             check_amount_count: number;
+            /**
+             * Cook Time Minutes
+             * @description Cooking time (0 = not split from prep).
+             */
+            cook_time_minutes: number;
             /**
              * Id
              * Format: uuid
@@ -1603,12 +1650,30 @@ export interface components {
             missing_unpriced_count: number;
             /** Name */
             name: string;
-            /** Prep Time Minutes */
+            /**
+             * Prep Time Minutes
+             * @description Preparation time.
+             */
             prep_time_minutes: number;
             /** Servings */
             servings: number;
+            /**
+             * Staples
+             * @description Basics the steps use (water, salt, oil…); not matched against the pantry.
+             */
+            staples: string[];
+            /**
+             * Steps
+             * @description Cooking steps in order (number them from 1).
+             */
+            steps: string[];
             /** Total Count */
             total_count: number;
+            /**
+             * Total Time Minutes
+             * @description prep + cook.
+             */
+            total_time_minutes: number;
         };
         /** RecipeSummary */
         RecipeSummary: {
@@ -1616,6 +1681,11 @@ export interface components {
             available_count: number;
             /** Check Amount Count */
             check_amount_count: number;
+            /**
+             * Cook Time Minutes
+             * @description Cooking time (0 = not split from prep).
+             */
+            cook_time_minutes: number;
             /**
              * Id
              * Format: uuid
@@ -1637,12 +1707,20 @@ export interface components {
             missing_unpriced_count: number;
             /** Name */
             name: string;
-            /** Prep Time Minutes */
+            /**
+             * Prep Time Minutes
+             * @description Preparation time.
+             */
             prep_time_minutes: number;
             /** Servings */
             servings: number;
             /** Total Count */
             total_count: number;
+            /**
+             * Total Time Minutes
+             * @description prep + cook.
+             */
+            total_time_minutes: number;
         };
         /** Recommendations */
         Recommendations: {

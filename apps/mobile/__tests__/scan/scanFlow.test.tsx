@@ -238,6 +238,41 @@ describe('Receipt review', () => {
     expect(screen.queryByText(/Simulated OCR/)).toBeNull();
   });
 
+  // Phase 8C: the date hint stayed up after the user had picked the date themselves.
+  it('hides the date hint once the user picks a date, and brings it back on Reset changes', async () => {
+    const { DateTimePickerAndroid } = jest.requireMock('@react-native-community/datetimepicker');
+    (DateTimePickerAndroid.open as jest.Mock).mockImplementation(
+      ({ value, onChange }: { value: Date; onChange: (e: { type: string }, d: Date) => void }) =>
+        onChange({ type: 'set' }, new Date(value.getTime() - 60 * 60 * 1000)),
+    );
+    const hint = 'Check the date: day and month could be swapped.';
+    await openReview(
+      receipt({ flags: [{ field: 'occurred_at', code: 'ambiguous', message: hint }] }),
+    );
+    expect(screen.getByText(hint)).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByLabelText(/^Date, .*\. Change$/));
+    await waitFor(() => expect(screen.queryByText(hint)).toBeNull());
+    expect(DateTimePickerAndroid.open).toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Reset changes' }));
+    expect(await screen.findByText(hint)).toBeOnTheScreen();
+  });
+
+  it('keeps the date hint when the user cancels the date picker', async () => {
+    const { DateTimePickerAndroid } = jest.requireMock('@react-native-community/datetimepicker');
+    (DateTimePickerAndroid.open as jest.Mock).mockImplementation(
+      ({ onChange }: { onChange: (e: { type: string }) => void }) =>
+        onChange({ type: 'dismissed' }),
+    );
+    const hint = 'Check the date: day and month could be swapped.';
+    await openReview(
+      receipt({ flags: [{ field: 'occurred_at', code: 'ambiguous', message: hint }] }),
+    );
+    await fireEvent.press(screen.getByLabelText(/^Date, .*\. Change$/));
+    expect(screen.getByText(hint)).toBeOnTheScreen();
+  });
+
   it('labels simulated development results', async () => {
     await openReview(receipt({ simulated: true, ocr_engine: 'fixture' }));
     expect(screen.getByText(/Simulated OCR \(development\)/)).toBeOnTheScreen();

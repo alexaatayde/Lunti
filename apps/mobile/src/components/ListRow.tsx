@@ -74,7 +74,7 @@ export function ListRow({
         <View style={styles.right}>
           {value ? <AppText variant="rowTitle">{value}</AppText> : null}
           {time ? (
-            <AppText variant="small" color={colors.textFaint} style={styles.time}>
+            <AppText variant="small" color={colors.textMuted} style={styles.time}>
               {time}
             </AppText>
           ) : null}

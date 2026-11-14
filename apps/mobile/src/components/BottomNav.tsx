@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { colors, font, sizes } from '../theme';
-import { AppText } from './AppText';
+import { AppText, NAV_FONT_SCALE } from './AppText';
 import {
   AnalyticsIcon,
   BudgetIcon,
@@ -56,6 +56,7 @@ export function BottomNav({ active, onSelect, bottomInset = 0 }: BottomNavProps)
               <Icon active={isActive} />
             </View>
             <AppText
+              maxFontSizeMultiplier={NAV_FONT_SCALE}
               numberOfLines={1}
               style={[styles.label, isActive ? styles.labelActive : styles.labelInactive]}
             >

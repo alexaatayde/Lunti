@@ -64,3 +64,12 @@ export function answeredText(s: Suggestion): string | null {
 
 export const isOpen = (s: Suggestion | null | undefined) =>
   !!s && (s.status === 'pending' || s.status === 'modified');
+
+/**
+ * Notifications Back label (Phase 8C): names the screen Back returns to. Only two screens open
+ * Notifications: Profile (passes from=profile) and the Home bell. Opened any other way (a
+ * direct link), Back lands on the tabs' anchor, Home. Push taps never open this screen.
+ */
+export function notificationsBackLabel(from: string | undefined): 'Profile' | 'Home' {
+  return from === 'profile' ? 'Profile' : 'Home';
+}

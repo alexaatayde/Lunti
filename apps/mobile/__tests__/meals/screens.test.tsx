@@ -11,6 +11,7 @@ import {
   pantryPage,
   problem,
   recipe,
+  recipeDetail,
   reply,
 } from '../../test-utils/fakeApi';
 import { fakeSession, resetFakeSupabase } from '../../test-utils/fakeSupabase';
@@ -258,33 +259,43 @@ describe('Pantry', () => {
 
 describe('Recipe detail', () => {
   it('shows each ingredient with text status, not just color', async () => {
-    api.set('GET /api/v1/recipes/r-1', {
-      ...recipe(),
-      ingredients: [
-        ingredient(),
-        ingredient({
-          name: 'tomato',
-          quantity: '2.000',
-          status: 'check_amount',
-          pantry_item_name: 'Tomatoes',
-        }),
-        ingredient({
-          name: 'onion',
-          quantity: '1.000',
-          status: 'missing',
-          pantry_item_name: null,
-          est_price: '10.00',
-        }),
-        ingredient({
-          name: 'garlic',
-          quantity: '1.000',
-          unit: 'head',
-          status: 'missing',
-          pantry_item_name: null,
-          est_price: null,
-        }),
-      ],
-    });
+    api.set(
+      'GET /api/v1/recipes/r-1',
+      recipeDetail({
+        ingredients: [
+          ingredient(),
+          ingredient({
+            name: 'tomato',
+            quantity: '2.000',
+            status: 'check_amount',
+            pantry_item_name: 'Tomatoes',
+            have_quantity: '1.000',
+            have_unit: 'bag',
+          }),
+          ingredient({
+            name: 'onion',
+            quantity: '1.000',
+            status: 'missing',
+            pantry_item_name: null,
+            have_quantity: null,
+            have_unit: null,
+            have_confirmed: null,
+            est_price: '10.00',
+          }),
+          ingredient({
+            name: 'garlic',
+            quantity: '1.000',
+            unit: 'head',
+            status: 'missing',
+            pantry_item_name: null,
+            have_quantity: null,
+            have_unit: null,
+            have_confirmed: null,
+            est_price: null,
+          }),
+        ],
+      }),
+    );
     api.set('POST /api/v1/recipes/r-1/add-missing', () =>
       reply(200, { added: [], already_on_list: ['Onion'] }),
     );
@@ -293,17 +304,79 @@ describe('Recipe detail', () => {
     expect(
       await screen.findByText('Scrambled eggs with tomatoes', {}, { timeout: 4000 }),
     ).toBeOnTheScreen();
-    expect(screen.getByLabelText('eggs, 4 pcs: You have it')).toBeOnTheScreen();
-    expect(screen.getByLabelText('tomato, 2 pcs: Check amount')).toBeOnTheScreen();
-    expect(screen.getByLabelText('onion, 1 pcs: Need to buy, about ₱10.00')).toBeOnTheScreen();
+    expect(
+      screen.getByLabelText('eggs, needs 4 pcs. You have it. You have about 6 pcs (estimate)'),
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByLabelText('tomato, needs 2 pcs. Check amount. You have about 1 bag (estimate)'),
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByLabelText('onion, needs 1 pcs. Need to buy. about ₱10.00'),
+    ).toBeOnTheScreen();
     // An unknown price is shown as unknown, never as ₱0.
-    expect(screen.getByLabelText('garlic, 1 head: Need to buy, price unknown')).toBeOnTheScreen();
+    expect(
+      screen.getByLabelText('garlic, needs 1 head. Need to buy. price unknown'),
+    ).toBeOnTheScreen();
     expect(screen.getByText('Price unknown')).toBeOnTheScreen();
-    await fireEvent.press(screen.getByRole('button', { name: 'Add missing to list' }));
+    await fireEvent.press(screen.getByRole('button', { name: /Add 1 missing ingredient to/ }));
     await waitFor(() =>
       expect(useToastStore.getState().message).toBe(
         'Those items are already on your grocery list.',
       ),
     );
+  });
+
+  it('shows times, servings, staples and numbered steps', async () => {
+    api.set('GET /api/v1/recipes/r-1', recipeDetail());
+    await renderRouter(appDir, { initialUrl: '/meals/recipe/r-1' });
+
+    expect(
+      await screen.findByText('Scrambled eggs with tomatoes', {}, { timeout: 4000 }),
+    ).toBeOnTheScreen();
+    expect(screen.getByLabelText('Prep: 3 min')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Cook: 7 min')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Total: 10 min')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Serves: 2 servings')).toBeOnTheScreen();
+    expect(screen.getByText('Cooking oil · Salt')).toBeOnTheScreen();
+    expect(
+      screen.getByLabelText('Step 1 of 3. Dice the tomatoes and the onion.'),
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByLabelText('Step 3 of 3. Add the eggs and stir until set.'),
+    ).toBeOnTheScreen();
+    expect(screen.getByTestId('recipe-photo-placeholder', { includeHiddenElements: true })).toBeOnTheScreen();
+  });
+
+  it('says when the pantry has some, but not enough', async () => {
+    api.set('GET /api/v1/recipes/r-1', recipeDetail());
+    await renderRouter(appDir, { initialUrl: '/meals/recipe/r-1' });
+
+    expect(
+      await screen.findByLabelText('tomato, needs 2 pcs. Not enough. You have 1 pcs. price unknown', {}, { timeout: 4000 }),
+    ).toBeOnTheScreen();
+    expect(screen.getByText('Amounts marked “estimate” come from your receipts. Confirm them in Pantry.')).toBeOnTheScreen();
+  });
+
+  it('still opens against an API from before migration 0005 (no steps, staples or split times)', async () => {
+    const old: Record<string, unknown> = recipeDetail({ prep_time_minutes: 10 });
+    for (const k of ['steps', 'staples', 'cook_time_minutes', 'total_time_minutes']) delete old[k];
+    api.set('GET /api/v1/recipes/r-1', old);
+    await renderRouter(appDir, { initialUrl: '/meals/recipe/r-1' });
+
+    expect(
+      await screen.findByText('Cooking steps for this recipe aren’t available yet.', {}, { timeout: 4000 }),
+    ).toBeOnTheScreen();
+    expect(screen.getByLabelText('Total time: 10 min')).toBeOnTheScreen();
+  });
+
+  it('handles a recipe without steps yet', async () => {
+    api.set('GET /api/v1/recipes/r-1', recipeDetail({ steps: [], staples: [], cook_time_minutes: 0 }));
+    await renderRouter(appDir, { initialUrl: '/meals/recipe/r-1' });
+
+    expect(
+      await screen.findByText('Cooking steps for this recipe aren’t available yet.', {}, { timeout: 4000 }),
+    ).toBeOnTheScreen();
+    expect(screen.getByLabelText('Total time: 10 min')).toBeOnTheScreen();
+    expect(screen.queryByText('You’ll also need')).toBeNull();
   });
 });

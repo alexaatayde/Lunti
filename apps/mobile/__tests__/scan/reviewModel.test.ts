@@ -1,5 +1,6 @@
 import { fromCentavos, lineTotal, normalizeQuantity, toCentavos, toMilli } from '../../src/lib/centavos';
 import {
+  hintFor,
   draftToForm,
   formToConfirm,
   reviewSchema,
@@ -112,4 +113,15 @@ describe('review form', () => {
     expect(noItems.error!.issues[0].path).toEqual(['discount']);
     expect(reviewSchema.safeParse({ ...base(), items: [], discount: '' }).success).toBe(true);
   });
+});
+
+it('drops a field hint once the user has edited that field (Phase 8C)', () => {
+  const flags = [
+    { field: 'occurred_at' as const, code: 'ambiguous', message: 'Check the date.' },
+    { field: 'merchant' as const, code: 'low_confidence', message: 'Check the store.' },
+  ];
+  expect(hintFor(flags, 'occurred_at', false)?.message).toBe('Check the date.');
+  expect(hintFor(flags, 'occurred_at', true)).toBeUndefined();
+  expect(hintFor(flags, 'merchant', false)?.message).toBe('Check the store.');
+  expect(hintFor(flags, 'total', false)).toBeUndefined();
 });

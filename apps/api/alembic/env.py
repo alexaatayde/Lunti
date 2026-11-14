@@ -5,6 +5,7 @@ from logging.config import fileConfig
 from sqlalchemy import create_engine, pool
 
 from alembic import context
+from app.core import isolation
 from app.core.config import settings, to_sqlalchemy_url
 from app.models import metadata
 
@@ -21,6 +22,9 @@ def database_url() -> str:
     )
     if not url:
         raise SystemExit("Set DATABASE_URL in apps/api/.env or pass -x url=postgresql://...")
+    if isolation.isolated_mode():
+        # Migration tests: never a non-test database (app/core/isolation.py).
+        isolation.check_url(to_sqlalchemy_url(url))
     return to_sqlalchemy_url(url)
 
 

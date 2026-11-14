@@ -5,6 +5,7 @@ Duplicates: an item that is already on the list and not yet bought is not added 
 manual adds with the same name get 409; suggestion and recipe adds reuse the existing item.
 """
 
+from collections.abc import Callable
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
@@ -194,18 +195,27 @@ def add_from_recipe(
     *,
     name: str,
     recipe_id: UUID,
+    quantity: Decimal,
+    unit: str | None,
     est_price: Decimal | None,
+    covers: Callable[[str], bool] | None = None,
 ) -> tuple[ItemOut, bool]:
-    """For "Add missing to list": one purchase of the ingredient (source "recipe").
-    Returns (item, created); an unbought item with the same name is reused."""
+    """For "Add missing to list": the ingredient with the recipe's quantity and unit (source
+    "recipe"). Returns (item, created). An unbought item with the same name, or one `covers`
+    accepts by name, is returned unchanged (the user's own edits are kept)."""
     row = default_list(db, user, lock=True)
     existing = _open_duplicate(db, row.id, name, None)
+    if existing is None and covers is not None:
+        existing = next(
+            (i for i in _items(db, row.id) if not i.is_purchased and covers(i.name)), None
+        )
     if existing is not None:
         return _item_out(existing), False
     item = ShoppingListItem(
         shopping_list_id=row.id,
         name=name[:120],
-        quantity=Decimal(1),
+        quantity=quantity,
+        unit=unit or None,
         est_price=est_price,
         source="recipe",
         recipe_id=recipe_id,

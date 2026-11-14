@@ -35,7 +35,7 @@ const variantStyles: Record<
 > = {
   // SignIn.html / TxnForm.html: 52 px, primary, white 700, green shadow
   primary: {
-    container: { backgroundColor: colors.primary, boxShadow: shadows.primaryButton },
+    container: { backgroundColor: colors.primaryAction, boxShadow: shadows.primaryButton },
     text: colors.textOnPrimary,
     weight: 700,
     height: sizes.buttonPrimary,
@@ -94,7 +94,7 @@ export function Button({
       accessibilityState={{ disabled: !!inactive, busy: !!loading }}
       style={({ pressed }) => [
         styles.base,
-        { height: v.height },
+        { minHeight: v.height },
         v.container,
         pressed && !inactive && styles.pressed,
         disabled && styles.disabled,
@@ -128,6 +128,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
   },
   content: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   label: { lineHeight: 20 },

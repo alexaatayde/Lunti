@@ -219,7 +219,7 @@ it('draws the reminder switches in theme colors, on and off told apart by more t
     expect(s.props).toMatchObject({
       thumbTintColor: colors.surface,
       onTintColor: colors.primary,
-      tintColor: colors.textFaint,
+      tintColor: colors.controlBorder,
     });
   }
   // Screen readers get the state, and the thumb position differs (value), not only the color.
@@ -283,4 +283,38 @@ it('lists muted items and turns one back on', async () => {
 it('hides the muted card when nothing is muted', async () => {
   await open();
   expect(screen.queryByText('Muted items')).toBeNull();
+});
+
+// ---------- Phase 8C ----------
+
+it('has a meal ideas switch that saves notify_meals', async () => {
+  api.set('PUT /api/v1/me/preferences', (_r: Request, body: unknown) => reply(200, body));
+  await open();
+  const meals = screen.getByRole('switch', { name: 'Meal ideas and pantry reminders' });
+  expect(meals).toBeChecked();
+  await fireEvent(meals, 'valueChange', false);
+  await waitFor(() =>
+    expect(api.calls('PUT', '/api/v1/me/preferences')[0].body).toMatchObject({
+      notify_meals: false,
+      notify_budget: true,
+      notify_replenishment: true,
+      notify_shopping: true,
+    }),
+  );
+});
+
+it('names Home as the Back target when opened directly', async () => {
+  await open();
+  expect(screen.getByRole('button', { name: 'Back to Home' })).toBeOnTheScreen();
+});
+
+it('names Profile as the Back target when opened from Profile', async () => {
+  await renderRouter(appDir, { initialUrl: '/profile' });
+  await fireEvent.press(
+    await screen.findByRole('button', { name: /Notification settings/ }, { timeout: 4000 }),
+  );
+  expect(
+    await screen.findByRole('button', { name: 'Back to Profile' }, { timeout: 4000 }),
+  ).toBeOnTheScreen();
+  expect(screen.getByText('Profile')).toBeOnTheScreen();
 });

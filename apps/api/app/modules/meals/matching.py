@@ -43,6 +43,7 @@ class PantryItem:
     name: str
     quantity: Decimal
     unit: str | None
+    confirmed: bool = False  # False = an estimate from purchases
 
 
 @dataclass(frozen=True)

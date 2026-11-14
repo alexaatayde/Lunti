@@ -21,19 +21,29 @@ export const colors = {
   text: '#111827',
   textStrong: '#374151',
   textBody: '#4B5563',
-  textMuted: '#6B7280',
+  /** Darkened from #6B7280 (Phase 8C) to reach 4.5:1 on the tinted surfaces too. */
+  textMuted: '#636A76',
+  /** Decorative only (icons in fields, dividers): 2.5:1, never for text. */
   textFaint: '#9CA3AF',
+  /** Borders of unchecked checkboxes and off switches: 3:1 for UI components (WCAG 1.4.11). */
+  controlBorder: '#868D99',
   textOnPrimary: '#FFFFFF',
 
   // Brand
+  /** Brand green for fills without text (progress, checkboxes, icons): 3.3:1 on white. */
   primary: '#539E2F',
+  /**
+   * Phase 8C: green for fills that carry white text (primary button, FAB, active chip, Overall
+   * budget card) and for green text. 4.9:1 with white (WCAG AA); same hue, a step darker.
+   */
+  primaryAction: '#3F7F24',
   primaryBright: '#5CA833',
-  primaryLink: '#4F962D',
-  primaryEyebrow: '#5A9C39',
+  primaryLink: '#3F7F24',
+  primaryEyebrow: '#3F7F24',
   primaryDeep: '#1F4812',
   primaryChipBg: '#EDF6E8',
   primaryChipText: '#3E7525',
-  primaryChipTextAlt: '#4D972B',
+  primaryChipTextAlt: '#3E7525',
   track: '#DFE8D4',
 
   // Bottom navigation
@@ -53,7 +63,7 @@ export const colors = {
   dangerBorder: '#FECACA',
 
   // On a primary-colored card (Budget.html "Overall"), rendered with the current tokens.
-  onPrimaryMuted: 'rgba(255,255,255,0.78)',
+  onPrimaryMuted: 'rgba(255,255,255,0.95)',
   onPrimaryTrack: 'rgba(255,255,255,0.25)',
   onPrimaryFill: 'rgba(255,255,255,0.72)',
   onPrimaryChip: 'rgba(255,255,255,0.18)',

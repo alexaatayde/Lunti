@@ -121,9 +121,9 @@ function ProfileDetails({ me }: { me: Me }) {
 
       <Section title="Notifications">
         <Pressable
-          onPress={() => router.push('/notifications')}
+          onPress={() => router.push({ pathname: '/notifications', params: { from: 'profile' } })}
           accessibilityRole="button"
-          accessibilityLabel="Notification settings. Budget alerts, restock and shopping reminders, muted items"
+          accessibilityLabel="Notification settings. Budget alerts, restock, shopping and meal reminders, muted items"
           style={({ pressed }) => [styles.row, pressed && styles.pressed]}
         >
           <View style={styles.iconTile}>
@@ -133,7 +133,7 @@ function ProfileDetails({ me }: { me: Me }) {
             <AppText variant="bodyLarge" color={colors.text}>
               Notification settings
             </AppText>
-            <AppText variant="meta">Budget alerts, restock and shopping reminders</AppText>
+            <AppText variant="meta">Budget alerts, restock, shopping and meal reminders</AppText>
           </View>
           <ChevronRightIcon size={20} color={colors.textMuted} />
         </Pressable>
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: radius.pill,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryAction,
     alignItems: 'center',
     justifyContent: 'center',
   },

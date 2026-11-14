@@ -405,7 +405,7 @@ function TransactionRow({
       </View>
       <View style={styles.rowRight}>
         <AppText variant="rowTitle">{amount}</AppText>
-        <AppText variant="small" color={colors.textFaint}>
+        <AppText variant="small" color={colors.textMuted}>
           {time}
         </AppText>
       </View>

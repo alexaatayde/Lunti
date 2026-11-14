@@ -44,7 +44,7 @@ export function AmountInput({
           keyboardType="decimal-pad"
           inputMode="decimal"
           placeholder={placeholder}
-          placeholderTextColor={colors.textFaint}
+          placeholderTextColor={colors.textMuted}
           cursorColor={colors.primary}
           selectionColor={colors.primary}
           autoFocus={autoFocus}

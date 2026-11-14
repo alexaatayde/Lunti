@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { colors, font, radius } from '../theme';
-import { AppText } from './AppText';
+import { AppText, DENSE_FONT_SCALE } from './AppText';
 import { AlertCircleIcon, AlertTriangleIcon, ClockIcon } from './icons';
 
 export type BadgeTone = 'success' | 'outline' | 'neutral' | 'warn' | 'danger';
@@ -48,7 +48,9 @@ export function Badge({ label, tone = 'success', icon }: BadgeProps) {
       ]}
     >
       {leading}
-      <AppText style={[styles.text, { color: t.fg }]}>{label}</AppText>
+      <AppText style={[styles.text, { color: t.fg }]} maxFontSizeMultiplier={DENSE_FONT_SCALE}>
+        {label}
+      </AppText>
     </View>
   );
 }

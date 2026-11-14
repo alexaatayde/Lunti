@@ -168,11 +168,57 @@ it('adds an item, and shows the duplicate error from the API', async () => {
   });
 });
 
+// Phase 8C: keyboard users move field to field with the Next key, and Done submits.
+it('moves Item → Quantity → Unit → Price with the keyboard and submits from the last field', async () => {
+  api.set(`POST ${ITEMS}`, () => reply(201, listItem()));
+  await open();
+  await fireEvent.press(screen.getByRole('button', { name: 'Add item' }));
+  const name = await screen.findByLabelText('Item');
+  expect(name.props.returnKeyType).toBe('next');
+  expect(screen.getByLabelText('Quantity').props.returnKeyType).toBe('next');
+  expect(screen.getByLabelText('Unit').props.returnKeyType).toBe('next');
+  const price = screen.getByLabelText('Estimated price each (₱, optional)');
+  expect(price.props.returnKeyType).toBe('done');
+
+  await fireEvent.changeText(name, 'Lemons');
+  await fireEvent(price, 'submitEditing');
+  await waitFor(() => expect(api.calls('POST', ITEMS)).toHaveLength(1));
+});
+
+it('shows a recipe item with the amount and unit the recipe needs', async () => {
+  api.set('GET /api/v1/shopping-lists', [
+    shoppingList({
+      items: [
+        listItem({
+          id: 'i-2',
+          name: 'Soy sauce',
+          quantity: '120.000',
+          unit: 'ml',
+          est_price: null,
+          line_estimate: null,
+          source: 'recipe',
+          recipe_id: 'r-1',
+        }),
+      ],
+      open_count: 1,
+      unpriced_count: 1,
+    }),
+  ]);
+  await open();
+  expect(screen.getByText('120 ml')).toBeOnTheScreen();
+  expect(screen.getByText('From a recipe')).toBeOnTheScreen();
+  expect(
+    screen.getByRole('button', { name: 'Edit Soy sauce, 120 ml, from a recipe' }),
+  ).toBeOnTheScreen();
+});
+
 it('ticks an item off', async () => {
   api.set('GET /api/v1/shopping-lists', [shoppingList({ items: [listItem()], open_count: 1 })]);
   api.set(`PATCH ${ITEMS}/i-1`, () => reply(200, listItem({ is_purchased: true })));
   await open();
 
+  // Emulator finding: a 28 dp box needs 8 dp of hitSlop each side to reach 44 dp.
+  expect(screen.getByRole('checkbox', { name: 'Lemons, to buy' }).props.hitSlop).toBe(8);
   await fireEvent.press(screen.getByRole('checkbox', { name: 'Lemons, to buy' }));
   await waitFor(() =>
     expect(api.calls('PATCH', `${ITEMS}/i-1`)[0].body).toEqual({ is_purchased: true }),
