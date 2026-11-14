@@ -41,8 +41,8 @@
           "cameraPermission": "Lunti uses the camera to photograph receipts you choose to scan.",
           "microphonePermission": false
         }
-      ]
-    ],
-    "scheme": "lunti"
+      ],
+      "expo-status-bar"
+    ]
   }
 }

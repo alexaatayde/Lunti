@@ -2,6 +2,10 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "types": ["jest"]
+    "types": ["jest"],
+    "noEmit": true,
+    // app.config.ts is loaded by Expo's config loader, which only resolves a TypeScript import
+    // with its extension (./src/config/buildEnv.ts). tsc never emits here (Babel/Metro compile).
+    "allowImportingTsExtensions": true
   }
 }

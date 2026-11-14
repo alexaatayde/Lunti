@@ -8,6 +8,7 @@ jest.mock('../../src/lib/supabase', () => ({
   authStorage: { setPersist: jest.fn() },
   isSupabaseConfigured: false,
   missingSupabaseEnv: ['EXPO_PUBLIC_SUPABASE_ANON_KEY'],
+  configProblems: [],
 }));
 
 // Load the route tree once, outside any single test's timeout (see preloadRoutes.ts).

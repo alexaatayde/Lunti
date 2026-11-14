@@ -10,7 +10,7 @@ import * as SecureStore from 'expo-secure-store';
 import { AppState, Platform } from 'react-native';
 
 import { createAuthStorage, type KeyValueStore } from './authStorage';
-import { env, missingSupabaseEnv } from './env';
+import { configProblems, env, missingSupabaseEnv } from './env';
 import { installWebCrypto } from './webCrypto';
 
 // PKCE needs Web Crypto, which Hermes lacks (see webCrypto.ts). Installed before the client.
@@ -25,8 +25,9 @@ const webStore: KeyValueStore = {
 
 export const authStorage = createAuthStorage(Platform.OS === 'web' ? webStore : SecureStore);
 
-export const isSupabaseConfigured = missingSupabaseEnv.length === 0;
-export { missingSupabaseEnv };
+/** False when values are missing or unsafe (see env.ts); the root layout then shows SetupRequired. */
+export const isSupabaseConfigured = missingSupabaseEnv.length === 0 && configProblems.length === 0;
+export { configProblems, missingSupabaseEnv };
 
 /** Where supabase-js keeps the session in `authStorage`. */
 export const AUTH_STORAGE_KEY = 'lunti.auth';

@@ -24,6 +24,7 @@ import {
   ProgressBar,
   TintCard,
   BudgetIcon,
+  useLargeText,
 } from '../../src/components';
 import {
   featuredBudget,
@@ -49,6 +50,7 @@ export default function HomeScreen() {
   const summary = useTransactionSummary(monthRange(month));
   const featured = budgets.data ? featuredBudget(budgets.data) : undefined;
   const notifications = useNotifications();
+  const largeText = useLargeText();
 
   const refresh = () => {
     budgets.refetch();
@@ -127,6 +129,8 @@ export default function HomeScreen() {
         onPress={() => router.push('/scan/camera')}
         // The tab bar sits below this screen (not over it), so the FAB only needs a small gap.
         style={styles.fab}
+        // At large font sizes the labelled pill would cover amounts; the round button stays labelled.
+        compact={largeText}
       />
     </View>
   );
@@ -213,6 +217,8 @@ function BudgetHero({ status }: { status: BudgetStatus }) {
 }
 
 function SpendingCard({ summary, cap }: { summary: TransactionSummary; cap?: BudgetStatus }) {
+  // Large font sizes: the name gets its own line so it never breaks mid-word ("Grocerie/s").
+  const stacked = useLargeText();
   if (summary.count === 0) {
     return (
       <Card>
@@ -243,14 +249,32 @@ function SpendingCard({ summary, cap }: { summary: TransactionSummary; cap?: Bud
           accessible
           accessibilityLabel={`${row.category.name}: ${formatMoney(row.total)}, ${row.share_pct}% of spending`}
         >
-          <View style={styles.categoryLine}>
-            <View style={[styles.dot, { backgroundColor: categoryColor(row.category.icon) }]} />
-            <AppText variant="bodyLarge" color={colors.text} style={styles.flex}>
-              {row.category.name}
-            </AppText>
-            <AppText style={styles.categoryAmount}>{formatMoney(row.total)}</AppText>
-            <AppText style={styles.share}>{row.share_pct}%</AppText>
-          </View>
+          {stacked ? (
+            <>
+              <View style={styles.categoryLine}>
+                <View style={[styles.dot, { backgroundColor: categoryColor(row.category.icon) }]} />
+                <AppText variant="bodyLarge" color={colors.text} style={styles.flex}>
+                  {row.category.name}
+                </AppText>
+              </View>
+              <View
+                style={[styles.categoryLine, styles.stackedFigures]}
+                testID={`category-figures-${row.category.id}`}
+              >
+                <AppText style={styles.categoryAmount}>{formatMoney(row.total)}</AppText>
+                <AppText style={styles.share}>{row.share_pct}%</AppText>
+              </View>
+            </>
+          ) : (
+            <View style={styles.categoryLine}>
+              <View style={[styles.dot, { backgroundColor: categoryColor(row.category.icon) }]} />
+              <AppText variant="bodyLarge" color={colors.text} style={styles.flex}>
+                {row.category.name}
+              </AppText>
+              <AppText style={styles.categoryAmount}>{formatMoney(row.total)}</AppText>
+              <AppText style={styles.share}>{row.share_pct}%</AppText>
+            </View>
+          )}
           <View style={styles.shareTrack}>
             <View
               style={[
@@ -327,6 +351,8 @@ const styles = StyleSheet.create({
   total: { ...font(900), fontSize: 26, lineHeight: 32, color: colors.text },
   categoryRow: { gap: spacing.sm },
   categoryLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  // Lines the figures up under the name (dot 8 + gap).
+  stackedFigures: { paddingLeft: 8 + spacing.sm, justifyContent: 'space-between' },
   categoryAmount: { ...font(800), fontSize: 15, color: colors.text },
   share: { ...font(500), fontSize: 11, color: colors.textMuted, minWidth: 30, textAlign: 'right' },
   // Home.html: 6 px bar in the category's color.

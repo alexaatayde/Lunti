@@ -25,6 +25,7 @@ import {
 import { signOut } from '../src/features/auth/authService';
 import { ErrorState, LoadingBlocks } from '../src/features/money/StateViews';
 import { formatLongDate } from '../src/lib/dates';
+import { versionText } from '../src/lib/env';
 import { colors, font, radius, sizes, spacing } from '../src/theme';
 
 const tabHref = {
@@ -147,6 +148,10 @@ function ProfileDetails({ me }: { me: Me }) {
           divider
         />
         {since ? <InfoRow label="Member since" value={since} divider /> : null}
+      </Section>
+
+      <Section title="App">
+        <InfoRow label="Version" value={versionText()} />
       </Section>
     </>
   );

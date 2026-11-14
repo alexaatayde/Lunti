@@ -52,6 +52,12 @@ it('shows account facts from the API', async () => {
   expect(screen.getByLabelText('Member since: Nov 4, 2026')).toBeOnTheScreen();
 });
 
+it('shows the app version and names a non-production build (Phase 8D.1)', async () => {
+  await open();
+  // Tests run as a development bundle, which must say so.
+  expect(await screen.findByLabelText(/^Version: .+ · Development build$/)).toBeOnTheScreen();
+});
+
 it('handles a profile with no name or consent on record', async () => {
   api.set('GET /api/v1/me', { ...ME, full_name: null, data_consent_at: null });
   await open();

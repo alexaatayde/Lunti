@@ -2,12 +2,14 @@ import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AlertCircleIcon, AppText, PageTitle } from '../../components';
-import { missingSupabaseEnv } from '../../lib/supabase';
+import { appVariant } from '../../lib/env';
+import { configProblems, missingSupabaseEnv } from '../../lib/supabase';
 import { colors, font, radius, spacing } from '../../theme';
 
 /**
- * Shown instead of the app when apps/mobile/.env is missing the Supabase values,
- * so a misconfigured build fails clearly instead of crashing.
+ * Shown instead of the app when apps/mobile/.env is missing the Supabase values, or the build's
+ * public config is unsafe (a release build pointing at a local or http server, a non-anon
+ * Supabase key), so a misconfigured build fails clearly instead of crashing or leaking data.
  */
 export function SetupRequired() {
   const insets = useSafeAreaInsets();
@@ -18,12 +20,14 @@ export function SetupRequired() {
       </View>
       <PageTitle eyebrow="Setup needed" title="Lunti isn't connected yet" />
       <AppText variant="bodyLarge">
-        Add these values to apps/mobile/.env (see .env.example), then restart Expo:
+        {appVariant === 'development'
+          ? 'Fix these values in apps/mobile/.env (see .env.example), then restart Expo:'
+          : `This ${appVariant} build was made without safe connection settings. Rebuild it after fixing:`}
       </AppText>
       <View style={styles.list}>
-        {missingSupabaseEnv.map((name) => (
-          <AppText key={name} style={styles.code}>
-            {name}
+        {[...missingSupabaseEnv, ...configProblems].map((item) => (
+          <AppText key={item} style={styles.code}>
+            {item}
           </AppText>
         ))}
       </View>

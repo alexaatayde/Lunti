@@ -17,6 +17,10 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+*.keystore
+# EAS local credentials (credentials.json points at keystores) and Firebase config
+credentials.json
+google-services.json
 
 # Metro
 .metro-health-check*
