@@ -113,6 +113,19 @@ describe('app.config.ts', () => {
     expect(evaluate({}).android?.predictiveBackGestureEnabled).toBe(false);
   });
 
+  it('registers the MainActivity configChanges manifest mod for every variant', () => {
+    const configs = [
+      evaluate({}),
+      evaluate({ ...SAFE_RELEASE, APP_VARIANT: 'preview' }),
+      evaluate({ ...SAFE_RELEASE, APP_VARIANT: 'production' }),
+    ];
+    for (const config of configs) {
+      // Plugins register their mods on the config object; ExpoConfig doesn't type `mods`.
+      const { mods } = config as { mods?: { android?: { manifest?: unknown } } };
+      expect(typeof mods?.android?.manifest).toBe('function');
+    }
+  });
+
   it('does not put a scheme in app.json (each variant sets its own)', () => {
     expect(appJson.expo.scheme).toBeUndefined();
   });

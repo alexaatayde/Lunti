@@ -8,6 +8,7 @@
  */
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
+import { withActivityConfigChanges } from './plugins/withActivityConfigChanges.ts';
 import {
   VARIANT_IDENTITY,
   buildEnvProblems,
@@ -47,7 +48,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     );
   }
 
-  return {
+  // Font/display/language changes must not recreate MainActivity (see the plugin for why).
+  return withActivityConfigChanges({
     ...config,
     name: identity.name,
     slug: config.slug ?? 'lunti',
@@ -75,5 +77,5 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       environmentLabel: identity.label,
       releaseBuild: isReleaseVariant(variant),
     },
-  };
+  });
 };

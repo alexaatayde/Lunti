@@ -75,6 +75,34 @@ user-facing version and is changed by hand. No `runtimeVersion` (expo-updates is
 6. Add a 96×96 white-on-transparent notification icon and set `icon` in the
    `expo-notifications` plugin (Android otherwise draws the app icon as a white square).
 
+## Local development build (Phase 8D.2)
+
+No EAS project or cloud build is needed. `/android` is generated (git-ignored) by prebuild:
+
+```sh
+cd apps/mobile
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"  # no system JDK needed
+export ANDROID_HOME=~/Library/Android/sdk
+npx expo prebuild --platform android --no-install   # also rewrites the android/ios scripts in package.json: revert that
+npx expo run:android --device emulator-5554 --no-bundler   # with Metro already running (expo start)
+```
+
+The first build downloads Gradle 9.4.1, a JDK 17 toolchain (`~/.gradle/jdks`), NDK 27.1, CMake
+3.22.1 and Build-Tools 37 (about 20 minutes); later builds take a few minutes. A local release-like
+build (`./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a`) is R8-minified and
+signed with the template's debug keystore, so it creates no signing credentials.
+
+**MainActivity `configChanges`.** `plugins/withActivityConfigChanges.ts` adds `fontScale`,
+`density`, `fontWeightAdjustment`, `locale` and `layoutDirection`. Without them, changing the
+system font size, display size, bold text or language recreated the activity, mounted a second
+React root, and the next navigation tap crashed the release build ("The imperative router is
+unavailable before the first render has finished"). Trade-off: screens already rendered keep
+their text size until they re-render.
+
+Debug-only differences: the dev client asks for "Nearby devices" (`ACCESS_LOCAL_NETWORK`, to reach
+Metro) and shows a draggable **Tools** button that can cover the header's Profile button. Neither
+is in the release manifest.
+
 ## Native-build checks to run once a dev/preview build exists
 
 - **expo-crypto in an optimized build:** request a password reset in the preview APK and
