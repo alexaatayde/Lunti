@@ -1,7 +1,10 @@
 """/receipts against a real database (needs TEST_DATABASE_URL). OCR and storage are fakes."""
 
+import threading
+import time
 import uuid
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from decimal import Decimal
 
@@ -11,15 +14,23 @@ from sqlalchemy import Engine, text
 
 from app.main import app
 from app.modules.expenses import periods
+from app.modules.receipts import images
 from app.modules.receipts.ocr import OcrResult, OcrUnavailable, get_ocr
-from app.modules.receipts.storage import StorageUnavailable, get_storage
+from app.modules.receipts.storage import (
+    ObjectExists,
+    StorageUnavailable,
+    check_path,
+    get_storage,
+)
+from app.modules.receipts.tests.imaging import BLURRY, NOTES, RECEIPT, kind_of, near, photo
 
 pytestmark = pytest.mark.db
 
 API = "/api/v1/receipts"
-JPEG = b"\xff\xd8\xff\xe0" + b"receipt-photo"
-UNREADABLE = b"\xff\xd8\xff\xe0" + b"blurry"
-NOT_A_RECEIPT = b"\xff\xd8\xff\xe0" + b"notes"
+# Real photos (uploads are decoded and re-encoded); FakeOcr tells them apart by colour.
+JPEG = photo(RECEIPT)
+UNREADABLE = photo(BLURRY)
+NOT_A_RECEIPT = photo(NOTES)
 
 
 def today_line() -> str:
@@ -45,35 +56,64 @@ class FakeOcr:
     def __init__(self) -> None:
         self.calls = 0
         self.down = False
+        self.images: list[bytes] = []  # what OCR was given (always the sanitised photo)
 
     def read(self, image: bytes) -> OcrResult:
         self.calls += 1
+        self.images.append(image)
         if self.down:
             raise OcrUnavailable
-        if image == UNREADABLE:
+        colour = kind_of(image)
+        if near(colour, BLURRY):
             return OcrResult("", None, "google_vision")
-        if image == NOT_A_RECEIPT:
+        if near(colour, NOTES):
             return OcrResult("Meeting notes\nCall the landlord", 0.97, "google_vision")
         return OcrResult(receipt_text(), 0.9, "google_vision")
 
 
 class FakeStorage:
+    """Behaves like the real adapters: refuses other object names, never overwrites (put
+    raises ObjectExists), and a missing object reads as None / deletes as a no-op."""
+
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
+        self.content_types: dict[str, str] = {}
         self.down = False
+        self.get_down = False
+        self.delete_down = False
+        self.puts: list[str] = []
+        self.deletes: list[str] = []
+        # Write the object, then fail the request (a lost response / timeout after upload).
+        self.fail_after_put = False
 
     def put(self, path: str, data: bytes, content_type: str) -> None:
+        check_path(path)
         if self.down:
             raise StorageUnavailable
-        assert path not in self.objects
+        self.puts.append(path)
+        if path in self.objects:
+            raise ObjectExists
         self.objects[path] = data
+        self.content_types[path] = content_type
+        if self.fail_after_put:
+            raise StorageUnavailable
+
+    def get(self, path: str) -> bytes | None:
+        check_path(path)
+        if self.down or self.get_down:
+            raise StorageUnavailable
+        return self.objects.get(path)
 
     def delete(self, path: str) -> None:
-        if self.down:
+        check_path(path)
+        if self.down or self.delete_down:
             raise StorageUnavailable
+        self.deletes.append(path)
         self.objects.pop(path, None)
+        self.content_types.pop(path, None)
 
     def signed_url(self, path: str) -> str | None:
+        check_path(path)
         return f"https://storage.test/signed/{path}"
 
 
@@ -225,6 +265,252 @@ def test_upload_rejects_non_images(db_client: TestClient, fakes, user, image: by
 def test_upload_needs_a_uuid_client_id(db_client: TestClient, fakes, user) -> None:  # noqa: ANN001
     headers, _ = user
     assert upload(db_client, headers, client_id="not-a-uuid").status_code == 422
+
+
+# ---------- sanitised photos (Phase 8D.3) ----------
+
+
+def photo_path(headers: dict[str, str], client_id: str) -> str:
+    return f"{headers_user_id(headers)}/{client_id}.jpg"
+
+
+def test_only_the_sanitised_jpeg_is_stored_and_read(db_client: TestClient, fakes, user) -> None:  # noqa: ANN001
+    ocr, storage = fakes
+    headers, _ = user
+    original = photo(RECEIPT, fmt="PNG", gps=True, extras=True)
+    response = upload(db_client, headers, original)
+    assert response.status_code == 201, response.text
+
+    path = photo_path(headers, response.json()["id"])
+    assert list(storage.objects) == [path]  # .jpg even though a PNG was uploaded
+    assert storage.content_types[path] == "image/jpeg"
+    stored = storage.objects[path]
+    assert stored == images.sanitize(original).data
+    assert ocr.images == [stored]  # OCR never sees the original file
+    assert b"Exif" not in stored and b"14.5833" not in stored and b"ZZ secret" not in stored
+
+
+def test_undecodable_upload_is_refused_before_anything_is_written(
+    db_client: TestClient,
+    fakes,
+    user,  # noqa: ANN001
+) -> None:
+    ocr, storage = fakes
+    headers, _ = user
+    client_id = str(uuid.uuid4())
+    response = upload(db_client, headers, b"\xff\xd8\xff\xe0" + b"not really a photo", client_id)
+    assert response.status_code == 422
+    assert response.json()["errors"][0] == {
+        "field": "image",
+        "message": "We couldn't read this photo. Take a new photo or choose another one.",
+        "code": "unreadable_image",
+    }
+    assert storage.puts == [] and ocr.calls == 0
+    assert db_client.get(f"{API}/{client_id}", headers=headers).status_code == 404
+
+
+def test_oversized_resolution_is_refused(
+    db_client: TestClient,
+    fakes,
+    user,
+    monkeypatch: pytest.MonkeyPatch,  # noqa: ANN001
+) -> None:
+    monkeypatch.setitem(images.MAX_SOURCE_PIXELS, "JPEG", 1000)
+    response = upload(db_client, user[0])
+    assert response.status_code == 422
+    assert response.json()["errors"][0]["code"] == "too_many_pixels"
+    assert fakes[1].puts == []
+
+
+# ---------- retries (Phase 8D.3) ----------
+
+
+def test_identical_retry_returns_the_receipt_and_writes_nothing(
+    db_client: TestClient,
+    fakes,
+    user,  # noqa: ANN001
+) -> None:
+    ocr, storage = fakes
+    headers, _ = user
+    client_id = str(uuid.uuid4())
+    first = upload(db_client, headers, client_id=client_id)
+    again = upload(db_client, headers, client_id=client_id)
+    assert (first.status_code, again.status_code) == (201, 200)
+    assert again.json() == first.json()
+    assert storage.puts == [photo_path(headers, client_id)] and storage.deletes == []
+    assert ocr.calls == 1
+
+
+def test_a_different_photo_under_a_used_id_is_refused(db_client: TestClient, fakes, user) -> None:  # noqa: ANN001
+    ocr, storage = fakes
+    headers, _ = user
+    client_id = str(uuid.uuid4())
+    accepted = upload(db_client, headers, client_id=client_id).json()
+    stored = dict(storage.objects)
+
+    other = upload(db_client, headers, NOT_A_RECEIPT, client_id)
+    assert other.status_code == 409
+    assert other.json()["detail"] == (
+        "This upload id was already used for a different photo. Scan again."
+    )
+    assert storage.objects == stored and storage.deletes == []  # accepted photo untouched
+    assert db_client.get(f"{API}/{client_id}", headers=headers).json() == accepted
+    assert ocr.calls == 1
+
+
+def test_retry_matches_a_photo_stored_before_sanitising(db_client: TestClient, fakes, user) -> None:  # noqa: ANN001
+    _, storage = fakes
+    headers, _ = user
+    client_id = str(uuid.uuid4())
+    upload(db_client, headers, client_id=client_id)
+    storage.objects[photo_path(headers, client_id)] = JPEG  # as stored before Phase 8D.3
+    assert upload(db_client, headers, client_id=client_id).status_code == 200
+
+
+def test_retry_when_the_stored_photo_is_missing_returns_the_receipt(
+    db_client: TestClient,
+    fakes,
+    user,  # noqa: ANN001
+) -> None:
+    _, storage = fakes
+    headers, _ = user
+    client_id = str(uuid.uuid4())
+    upload(db_client, headers, client_id=client_id)
+    storage.objects.clear()
+    retry = upload(db_client, headers, client_id=client_id)
+    assert retry.status_code == 200 and storage.objects == {}  # nothing re-stored
+
+
+def test_retry_check_during_a_storage_outage_is_a_503(db_client: TestClient, fakes, user) -> None:  # noqa: ANN001
+    _, storage = fakes
+    headers, _ = user
+    client_id = str(uuid.uuid4())
+    upload(db_client, headers, client_id=client_id)
+    storage.get_down = True
+    assert upload(db_client, headers, client_id=client_id).status_code == 503
+    storage.get_down = False
+    assert db_client.get(f"{API}/{client_id}", headers=headers).json()["status"] == "draft"
+
+
+def test_interrupted_upload_leaves_a_photo_the_retry_reuses(
+    db_client: TestClient,
+    fakes,
+    user,  # noqa: ANN001
+) -> None:
+    ocr, storage = fakes
+    headers, _ = user
+    client_id = str(uuid.uuid4())
+    path = photo_path(headers, client_id)
+    # The photo is stored, OCR fails, and deleting the photo again fails too.
+    ocr.down, storage.delete_down = True, True
+    assert upload(db_client, headers, client_id=client_id).status_code == 503
+    assert list(storage.objects) == [path]  # orphan: no receipt row
+    assert db_client.get(f"{API}/{client_id}", headers=headers).status_code == 404
+
+    ocr.down, storage.delete_down = False, False
+    retry = upload(db_client, headers, client_id=client_id)
+    assert retry.status_code == 201 and retry.json()["status"] == "draft"
+    assert storage.puts == [path, path]  # the second put found the identical photo
+    assert storage.deletes == [] and storage.objects[path] == images.sanitize(JPEG).data
+
+
+def test_lost_response_after_the_photo_was_stored_is_retried(
+    db_client: TestClient,
+    fakes,
+    user,  # noqa: ANN001
+) -> None:
+    ocr, storage = fakes
+    headers, _ = user
+    client_id = str(uuid.uuid4())
+    storage.fail_after_put = True  # stored, but the storage call times out
+    assert upload(db_client, headers, client_id=client_id).status_code == 503
+    assert ocr.calls == 0 and len(storage.objects) == 1
+
+    storage.fail_after_put = False
+    assert upload(db_client, headers, client_id=client_id).status_code == 201
+    assert len(storage.objects) == 1 and storage.deletes == []
+
+
+def test_leftover_of_a_different_photo_is_replaced_not_reused(
+    db_client: TestClient,
+    fakes,
+    user,  # noqa: ANN001
+) -> None:
+    ocr, storage = fakes
+    headers, _ = user
+    client_id = str(uuid.uuid4())
+    path = photo_path(headers, client_id)
+    ocr.down, storage.delete_down = True, True
+    upload(db_client, headers, NOT_A_RECEIPT, client_id)  # leaves the notes photo behind
+    ocr.down, storage.delete_down = False, False
+
+    retry = upload(db_client, headers, JPEG, client_id)  # a client reusing its id
+    assert retry.status_code == 201 and retry.json()["status"] == "draft"
+    assert storage.deletes == [path]  # the never-accepted leftover was removed first
+    assert storage.objects[path] == images.sanitize(JPEG).data
+
+
+def _slow_first_read(ocr: FakeOcr, started: threading.Event) -> None:
+    original = ocr.read
+
+    def read(image: bytes) -> OcrResult:
+        if not started.is_set():
+            started.set()
+            time.sleep(0.4)  # the second request arrives while this one holds the row
+        return original(image)
+
+    ocr.read = read  # type: ignore[method-assign]
+
+
+@pytest.mark.parametrize(
+    ("second_photo", "expected"),
+    [(JPEG, [200, 201]), (NOT_A_RECEIPT, [201, 409])],
+    ids=["same-photo", "different-photo"],
+)
+def test_concurrent_uploads_with_one_id_store_one_photo(
+    db_client: TestClient,
+    fakes,
+    user,
+    second_photo: bytes,
+    expected: list[int],  # noqa: ANN001
+) -> None:
+    ocr, storage = fakes
+    headers, _ = user
+    client_id = str(uuid.uuid4())
+    started = threading.Event()
+    _slow_first_read(ocr, started)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(upload, db_client, headers, JPEG, client_id)
+        assert started.wait(5)
+        second = pool.submit(upload, db_client, headers, second_photo, client_id)
+        codes = [first.result().status_code, second.result().status_code]
+
+    assert sorted(codes) == expected
+    path = photo_path(headers, client_id)
+    assert storage.puts == [path]  # only the request holding the new row wrote the photo
+    assert storage.objects == {path: images.sanitize(JPEG).data}
+    assert ocr.calls == 1
+
+
+def test_users_never_share_a_photo_path(
+    db_client: TestClient,
+    fakes,
+    make_user,
+    auth_header,  # noqa: ANN001
+) -> None:
+    ocr, storage = fakes
+    alice, bob = auth_header(make_user()), auth_header(make_user())
+    client_id = str(uuid.uuid4())
+    ocr.down, storage.delete_down = True, True
+    upload(db_client, alice, NOT_A_RECEIPT, client_id)  # alice's orphaned photo
+    ocr.down, storage.delete_down = False, False
+
+    assert upload(db_client, bob, JPEG, client_id).status_code == 201  # no row existed
+    alice_path, bob_path = photo_path(alice, client_id), photo_path(bob, client_id)
+    assert storage.objects[alice_path] == images.sanitize(NOT_A_RECEIPT).data  # untouched
+    assert storage.objects[bob_path] == images.sanitize(JPEG).data
+    assert storage.deletes == []
 
 
 # ---------- auth and isolation ----------

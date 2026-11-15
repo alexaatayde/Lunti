@@ -53,6 +53,7 @@ import {
   useHardwareBack,
 } from '../../../src/features/scan/flow';
 import { ItemSheet } from '../../../src/features/scan/ItemSheet';
+import { RECEIPT_IMAGE_CACHE_POLICY } from '../../../src/features/scan/receiptImage';
 import {
   LOW_CONFIDENCE_PCT,
   draftToForm,
@@ -255,6 +256,7 @@ function ReviewForm({
           {photoUri ? (
             <Image
               source={{ uri: photoUri }}
+              cachePolicy={RECEIPT_IMAGE_CACHE_POLICY}
               style={StyleSheet.absoluteFill}
               contentFit="contain"
               accessibilityLabel="Your receipt photo"

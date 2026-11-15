@@ -215,6 +215,27 @@ describe('Receipt review', () => {
     return router;
   }
 
+  it('shows the signed receipt image from memory only, never the disk cache', async () => {
+    const signed =
+      'https://proj.supabase.co/storage/v1/object/sign/receipts/u/r.jpg?token=short-lived';
+    // No local photo (e.g. the app was reopened): the review loads the signed URL.
+    useScanStore.getState().setReceipt(receipt({ image_url: signed }));
+    await renderRouter(appDir, { initialUrl: '/scan/review' });
+    const image = await screen.findByLabelText('Your receipt photo', {}, { timeout: 4000 });
+    // expo-image hands its native view a list of sources.
+    expect(image.props.source).toEqual([expect.objectContaining({ uri: signed })]);
+    expect(image.props.cachePolicy).toBe('memory');
+  });
+
+  it('keeps the local photo out of the disk cache too', async () => {
+    await openReview(receipt({ image_url: 'https://storage.test/signed/r.jpg?token=t' }));
+    const image = screen.getByLabelText('Your receipt photo');
+    expect(image.props.source).toEqual([
+      expect.objectContaining({ uri: 'file:///cache/receipt-photo.jpg' }),
+    ]);
+    expect(image.props.cachePolicy).toBe('memory');
+  });
+
   it('shows what OCR read, with confidence and review flags', async () => {
     await openReview(
       receipt({

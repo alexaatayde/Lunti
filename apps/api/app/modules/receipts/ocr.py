@@ -21,6 +21,7 @@ from typing import Protocol
 
 from app.core.config import settings
 from app.core.errors import ApiError
+from app.modules.receipts import images
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +176,9 @@ FIXTURE_CONFIDENCE = 0.95
 
 class FixtureOcr:
     """Development/testing only. Matches an uploaded image byte-for-byte (SHA-256) to a
-    synthetic receipt image and returns that receipt's stored text."""
+    synthetic receipt image and returns that receipt's stored text. OCR receives the
+    sanitised photo (images.sanitize), so each fixture is indexed under the hash of its
+    sanitised form as well as its original bytes."""
 
     name = FIXTURE
 
@@ -184,8 +187,10 @@ class FixtureOcr:
         for image in sorted(directory.iterdir()) if directory.is_dir() else []:
             text_file = image.with_suffix(".txt")
             if image.suffix.lower() in IMAGE_SUFFIXES and text_file.exists():
-                digest = hashlib.sha256(image.read_bytes()).hexdigest()
-                self._texts[digest] = text_file.read_text()
+                raw = image.read_bytes()
+                text = text_file.read_text()
+                self._texts[hashlib.sha256(raw).hexdigest()] = text
+                self._texts[images.sanitize(raw).sha256] = text
 
     def read(self, image: bytes) -> OcrResult:
         text = self._texts.get(hashlib.sha256(image).hexdigest())

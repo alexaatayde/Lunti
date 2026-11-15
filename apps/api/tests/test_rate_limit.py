@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.rate_limit import RateLimiter, Rule, parse_rules, retry_after_header
 from app.main import app
 from app.modules.expenses import periods
+from app.modules.receipts.tests.imaging import photo
 
 # ---------- limiter ----------
 
@@ -130,7 +131,7 @@ def test_retry_after_is_whole_seconds_rounded_up(wait: float, header: str) -> No
 
 # ---------- endpoints ----------
 
-JPEG = b"\xff\xd8\xff\xe0" + b"receipt-photo"
+JPEG = photo()  # a real image: uploads are decoded (images.sanitize)
 
 
 class CountingOcr:

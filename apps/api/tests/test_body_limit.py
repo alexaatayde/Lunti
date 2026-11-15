@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.core.body_limit import UPLOAD_OVERHEAD_BYTES, limit_for
 from app.core.config import settings
+from app.modules.receipts.tests.imaging import padded_jpeg
 
 
 def test_limits_per_route() -> None:
@@ -78,7 +79,7 @@ def test_receipt_photo_over_the_limit_is_refused_and_one_under_is_accepted(
     headers = auth_header(make_user())
 
     def send(size: int):  # noqa: ANN202
-        photo = b"\xff\xd8\xff\xe0" + b"x" * (size - 4)
+        photo = padded_jpeg(size)  # a real, decodable JPEG of exactly `size` bytes
         return db_client.post(
             "/api/v1/receipts",
             headers=headers,

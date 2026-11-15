@@ -18,7 +18,7 @@ from app.core.db import get_session_factory
 from app.jobs.receipt_cleanup import run_receipt_cleanup
 from app.modules.receipts import cleanup
 from app.modules.receipts.models import Receipt
-from app.modules.receipts.storage import RECEIPT_PATH, get_storage
+from app.modules.receipts.storage import get_storage, is_receipt_path
 
 
 def dry_run() -> dict[str, int]:
@@ -39,7 +39,7 @@ def dry_run() -> dict[str, int]:
     orphans = sum(
         1
         for o in get_storage().list_objects()
-        if RECEIPT_PATH.match(o.path) and o.created_at < cutoff and o.path not in referenced
+        if is_receipt_path(o.path) and o.created_at < cutoff and o.path not in referenced
     )
     return {"stale_drafts": drafts or 0, "orphaned_images": orphans}
 

@@ -134,15 +134,41 @@ One-time setup for real scanning:
    must be on). Create a service account (no project role is needed to call Vision), add a
    JSON key, save it outside the repo, e.g. `~/.config/lunti/vision-key.json`, and set
    `GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/vision-key.json` in `apps/api/.env`.
-2. **Supabase Storage.** Dashboard → Storage → *New bucket*: name `receipts`, **Public off**,
-   file size limit 10 MB, allowed types `image/jpeg, image/png, image/webp`. Add **no**
-   storage policies: only the backend's service-role key can read or write it.
-3. **Backend-only key.** Dashboard → Project Settings → API keys → copy the *service_role* /
-   secret key into `SUPABASE_SERVICE_ROLE_KEY` in `apps/api/.env`. Never put it in
-   `apps/mobile/.env` or any `EXPO_PUBLIC_*` variable.
+2. **Supabase Storage.** Dashboard → Storage → *New bucket*, twice: `receipts` (real use)
+   and `receipts-dev` (testing only; may be emptied at any time). For both: **Public off**,
+   file size limit 10 MB (10485760 bytes), allowed types `image/jpeg, image/png, image/webp`.
+   Add **no** storage policies: only the backend key can read or write them; the app only
+   ever gets 10-minute signed URLs from the API.
+3. **Backend-only key.** Dashboard → Project Settings → API keys → copy the legacy
+   *service_role* key or a *secret* key (`sb_secret_…`) into `SUPABASE_SERVICE_ROLE_KEY` in
+   `apps/api/.env`. Never put it in `apps/mobile/.env` or any `EXPO_PUBLIC_*` variable. The
+   API refuses an anon/publishable key here (503) instead of failing every request.
+4. **Check the setup (read-only).** `cd apps/api && .venv/bin/python -m
+   scripts.check_receipt_storage --bucket receipts --bucket receipts-dev` checks the key kind,
+   that each bucket exists, is private, has the size and type limits, can be read with the
+   key, serves nothing from its public URL, and that no storage policy reaches it (policies
+   are read in a `READ ONLY` transaction; `--no-db` skips that). It never prints the key.
 
-Photos are stored as `receipts/{user_id}/{receipt_id}.{jpg|png|webp}`; the app only gets
-10-minute signed URLs for its own receipts.
+**What is stored.** Every upload is decoded and re-encoded first (`app/modules/receipts/
+images.py`): the photo must be a complete JPEG, PNG or WebP of at most 10 MB and 50 MP (JPEG)
+/ 24 MP (PNG, WebP); its EXIF orientation is applied; **all metadata is dropped** (EXIF with
+GPS location and camera details, XMP, ICC, comments, PNG text); transparency is flattened onto
+white; the long edge is reduced to 2000 px; and it is saved as a JPEG (quality 85). Only that
+JPEG is stored, at `{bucket}/{user_id}/{receipt_id}.jpg` (`image/jpeg`), and only that JPEG is
+sent to OCR. Older objects may still end in `.png`/`.webp`. The storage adapters refuse any
+other object name (no `..`, no other prefixes) before making a request.
+
+**Upload retries.** The app sends its own `client_id` per photo; resending it is safe:
+
+- Same id, same photo (identical after re-encoding) → the existing receipt, `200`, nothing
+  written. Same id, **different** photo → `409`; the accepted photo is never replaced.
+- Two requests with one id at once: the database serialises them on the receipt's primary
+  key; only the one that created the row writes the photo, the other gets `200`/`409`.
+- A photo left behind by an attempt that never finished (photo stored, then OCR or the
+  database failed, and deleting it failed too) is reused by the retry if identical, or
+  removed and replaced if not; no receipt ever pointed at it. Otherwise the daily cleanup
+  deletes it after 24 h. Uploads hold a per-photo advisory lock that the cleanup also takes,
+  so it never deletes a photo an upload is about to save.
 
 **Development without credentials.** Start the API with simulated adapters:
 
@@ -151,7 +177,8 @@ OCR_PROVIDER=fixture RECEIPT_STORAGE=local uvicorn app.main:app --reload --host 
 ```
 
 - `fixture` OCR only recognises the synthetic images in `tests/fixtures/receipts/*.png`
-  (byte for byte) and returns their `.txt` text; any other photo reads as unreadable. The
+  (byte for byte, as uploaded or after re-encoding) and returns their `.txt` text; any other
+  photo reads as unreadable. The
   review screen labels these results "Simulated OCR (development)".
 - `local` storage writes photos to `apps/api/var/receipts/` (git-ignored). Never use it with
   real user data.

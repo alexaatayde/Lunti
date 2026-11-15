@@ -23,5 +23,8 @@ openai==3.37.0
 firebase-admin==7.7.0
 httpx==0.28.1
 
+# Receipt photos: decode, validate, strip metadata, re-encode (app/modules/receipts/images.py)
+Pillow==13.0.0
+
 # Scheduled jobs (AGENTS.md §7.6)
 APScheduler==3.11.3

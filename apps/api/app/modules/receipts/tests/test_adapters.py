@@ -1,5 +1,6 @@
 """OCR and storage adapters, image checks and discount allocation (no database)."""
 
+import base64
 import hashlib
 import json
 from datetime import UTC, datetime
@@ -13,6 +14,7 @@ import pytest
 from app.core.config import settings
 from app.core.errors import ApiError
 from app.modules.expenses.transaction_service import ReceiptLine
+from app.modules.receipts import images
 from app.modules.receipts import ocr as ocr_module
 from app.modules.receipts import storage as storage_module
 from app.modules.receipts.ocr import (
@@ -22,16 +24,23 @@ from app.modules.receipts.ocr import (
     Word,
     rows_from_words,
 )
-from app.modules.receipts.service import allocate_discount, sniff_image
+from app.modules.receipts.service import allocate_discount
 from app.modules.receipts.storage import (
+    SIGNED_URL_SECONDS,
+    InvalidObjectPath,
     LocalStorage,
+    ObjectExists,
     StorageUnavailable,
     StoredObject,
     SupabaseStorage,
+    service_key_kind,
 )
 
 FIXTURES = Path(__file__).resolve().parents[4] / "tests" / "fixtures" / "receipts"
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 20
+USER = "11111111-1111-4111-8111-111111111111"
+PATH = f"{USER}/22222222-2222-4222-8222-222222222222.jpg"
+OTHER = f"{USER}/33333333-3333-4333-8333-333333333333.jpg"
 
 
 # ---------- rows ----------
@@ -167,15 +176,18 @@ def test_supabase_upload_sign_and_delete() -> None:
         return httpx.Response(200, json={})
 
     storage = _supabase(handler)
-    storage.put("u/r.jpg", b"jpeg", "image/jpeg")
-    url = storage.signed_url("u/r.jpg")
-    storage.delete("u/r.jpg")
+    storage.put(PATH, b"jpeg", "image/jpeg")
+    url = storage.signed_url(PATH)
+    storage.delete(PATH)
 
     upload, sign, delete = seen
-    assert upload.method == "POST" and upload.url.path == "/storage/v1/object/receipts/u/r.jpg"
+    assert upload.method == "POST" and upload.url.path == f"/storage/v1/object/receipts/{PATH}"
     assert upload.headers["authorization"] == "Bearer service-key"
+    assert upload.headers["apikey"] == "service-key"
+    assert upload.headers["content-type"] == "image/jpeg"
     assert upload.headers["x-upsert"] == "false" and upload.content == b"jpeg"
-    assert json.loads(sign.content) == {"expiresIn": 600}
+    assert sign.url.path == f"/storage/v1/object/sign/receipts/{PATH}"
+    assert json.loads(sign.content) == {"expiresIn": 600} == {"expiresIn": SIGNED_URL_SECONDS}
     assert url == "https://proj.supabase.co/storage/v1/object/sign/receipts/u/r.jpg?token=t"
     assert delete.method == "DELETE"
 
@@ -183,27 +195,41 @@ def test_supabase_upload_sign_and_delete() -> None:
 def test_supabase_errors_are_unavailable_and_missing_delete_is_ok() -> None:
     storage = _supabase(lambda request: httpx.Response(500))
     with pytest.raises(StorageUnavailable):
-        storage.put("u/r.jpg", b"x", "image/jpeg")
-    _supabase(lambda request: httpx.Response(404)).delete("u/gone.jpg")
+        storage.put(PATH, b"x", "image/jpeg")
+    with pytest.raises(StorageUnavailable):
+        storage.get(PATH)
+    with pytest.raises(StorageUnavailable):
+        storage.delete(PATH)
+    _supabase(lambda request: httpx.Response(404)).delete(PATH)
+    not_found_body = {"statusCode": "404", "error": "not_found", "message": "Object not found"}
+    _supabase(lambda request: httpx.Response(400, json=not_found_body)).delete(PATH)
+    # A 400 that isn't "not found" is a real failure, not "already deleted".
+    with pytest.raises(StorageUnavailable):
+        _supabase(lambda request: httpx.Response(400, json={"error": "InvalidKey"})).delete(PATH)
 
     def down(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("down")
 
     with pytest.raises(StorageUnavailable):
-        _supabase(down).signed_url("u/r.jpg")
+        _supabase(down).signed_url(PATH)
+    with pytest.raises(StorageUnavailable):
+        _supabase(down).get(PATH)
 
 
 def test_local_storage_never_overwrites_or_escapes(tmp_path: Path) -> None:
     storage = LocalStorage(tmp_path)
-    storage.put("user/a.png", PNG, "image/png")
-    assert (tmp_path / "user" / "a.png").read_bytes() == PNG
-    with pytest.raises(StorageUnavailable):
-        storage.put("user/a.png", b"other", "image/png")
+    storage.put(PATH, PNG, "image/jpeg")
+    assert (tmp_path / USER / PATH.split("/")[1]).read_bytes() == PNG
+    with pytest.raises(ObjectExists):
+        storage.put(PATH, b"other", "image/jpeg")
+    assert storage.get(PATH) == PNG  # unchanged
+    assert storage.get(OTHER) is None
     with pytest.raises(ValueError):
         storage.put("../outside.png", PNG, "image/png")
-    storage.delete("user/a.png")
-    storage.delete("user/a.png")  # already gone: fine
-    assert storage.signed_url("user/a.png") is None
+    storage.delete(PATH)
+    storage.delete(PATH)  # already gone: fine
+    assert storage.get(PATH) is None
+    assert storage.signed_url(PATH) is None
 
 
 def test_supabase_lists_files_one_folder_deep_with_server_timestamps() -> None:
@@ -236,30 +262,162 @@ def test_supabase_listing_outage_raises_unavailable() -> None:
 
 def test_local_storage_lists_its_files(tmp_path: Path) -> None:
     storage = LocalStorage(tmp_path)
-    storage.put("user/a.png", PNG, "image/png")
+    storage.put(PATH, PNG, "image/jpeg")
     (tmp_path / "stray.txt").write_text("not in a user folder")
     found = list(storage.list_objects())
-    assert [o.path for o in found] == ["user/a.png"]
+    assert [o.path for o in found] == [PATH]
     assert found[0].created_at.tzinfo is UTC
     assert list(LocalStorage(tmp_path / "missing").list_objects()) == []
+
+
+# ---------- object names, duplicates, reads ----------
+
+BAD_PATHS = [
+    "../outside.jpg",
+    f"{USER}/../../etc/passwd",
+    f"{USER}/../33333333-3333-4333-8333-333333333333.jpg",
+    "/etc/passwd",
+    f"/{PATH}",
+    f"{PATH}\n",
+    f"{PATH}/x",
+    f"{USER}/%2e%2e%2fsecret.jpg",
+    f"{USER}/22222222-2222-4222-8222-222222222222.gif",
+    f"{USER}/22222222-2222-4222-8222-222222222222",
+    PATH.upper(),
+    f"other-prefix/{PATH}",
+    f"{USER}\\22222222-2222-4222-8222-222222222222.jpg",
+    "",
+]
+
+
+@pytest.mark.parametrize("bad", BAD_PATHS)
+def test_supabase_refuses_other_object_names_before_any_request(bad: str) -> None:
+    seen: list[httpx.Request] = []
+    storage = _supabase(lambda request: seen.append(request) or httpx.Response(200, json={}))
+    for call in (
+        lambda: storage.put(bad, b"x", "image/jpeg"),
+        lambda: storage.get(bad),
+        lambda: storage.delete(bad),
+        lambda: storage.signed_url(bad),
+    ):
+        with pytest.raises(InvalidObjectPath):
+            call()
+    assert seen == []
+
+
+@pytest.mark.parametrize("bad", BAD_PATHS)
+def test_local_storage_refuses_other_object_names(bad: str, tmp_path: Path) -> None:
+    root = tmp_path / "receipts"
+    storage = LocalStorage(root)
+    for call in (
+        lambda: storage.put(bad, b"x", "image/jpeg"),
+        lambda: storage.get(bad),
+        lambda: storage.delete(bad),
+        lambda: storage.signed_url(bad),
+    ):
+        with pytest.raises(InvalidObjectPath):
+            call()
+    assert list(tmp_path.rglob("*")) == []  # nothing written anywhere
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(409, json={"error": "Duplicate"}),
+        httpx.Response(400, json={"statusCode": "409", "error": "Duplicate", "message": "exists"}),
+    ],
+    ids=["409", "400-with-duplicate-body"],
+)
+def test_supabase_put_reports_an_existing_object(response: httpx.Response) -> None:
+    with pytest.raises(ObjectExists):
+        _supabase(lambda request: response).put(PATH, b"x", "image/jpeg")
+
+
+def test_supabase_get_reads_bytes_and_reports_missing_objects() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert request.url.path == f"/storage/v1/object/receipts/{PATH}"
+        assert request.headers["authorization"] == "Bearer service-key"
+        return httpx.Response(200, content=b"stored-jpeg")
+
+    assert _supabase(handler).get(PATH) == b"stored-jpeg"
+    assert _supabase(lambda request: httpx.Response(404)).get(PATH) is None
+    missing = {"statusCode": "404", "error": "not_found", "message": "Object not found"}
+    assert _supabase(lambda request: httpx.Response(400, json=missing)).get(PATH) is None
+
+
+def test_supabase_listing_asks_for_a_stable_order() -> None:
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json=[])
+
+    list(_supabase(handler).list_objects())
+    assert bodies[0]["sortBy"] == {"column": "name", "order": "asc"}
+
+
+# ---------- backend keys ----------
+
+
+def _jwt(claims: dict) -> str:
+    def part(value: dict) -> str:
+        return base64.urlsafe_b64encode(json.dumps(value).encode()).rstrip(b"=").decode()
+
+    return f"{part({'alg': 'HS256', 'typ': 'JWT'})}.{part(claims)}.c2lnbmF0dXJl"
+
+
+def test_service_key_kind_tells_backend_keys_from_public_ones() -> None:
+    assert service_key_kind(_jwt({"role": "service_role", "iss": "supabase"})) == (
+        "legacy_service_role"
+    )
+    assert service_key_kind("sb_secret_abc123") == "secret"
+    assert service_key_kind(f"  {'sb_secret_abc123'}  ") == "secret"
+    for public_or_bad in (
+        _jwt({"role": "anon"}),
+        _jwt({"role": "authenticated", "sub": USER}),
+        "sb_publishable_abc123",
+        "sb_secret_",
+        "not.a.jwt",
+        "service-key",
+        "",
+    ):
+        assert service_key_kind(public_or_bad) is None
+
+
+def test_storage_refuses_a_public_key_and_accepts_both_backend_kinds(
+    configured: pytest.MonkeyPatch,
+) -> None:
+    configured.setattr(settings, "receipt_storage", "supabase")
+    configured.setattr(settings, "supabase_url", "https://proj.supabase.co")
+    for public in ("sb_publishable_abc123", _jwt({"role": "anon"})):
+        storage_module.get_storage.cache_clear()
+        configured.setattr(settings, "supabase_service_role_key", public)
+        with pytest.raises(ApiError) as error:
+            storage_module.get_storage()
+        assert error.value.status == 503
+    for backend in ("sb_secret_abc123", _jwt({"role": "service_role"})):
+        storage_module.get_storage.cache_clear()
+        configured.setattr(settings, "supabase_service_role_key", backend)
+        assert isinstance(storage_module.get_storage(), SupabaseStorage)
 
 
 # ---------- image checks ----------
 
 
-def test_sniff_image_by_content() -> None:
-    assert sniff_image(b"\xff\xd8\xff\xe0rest") == ("jpg", "image/jpeg")
-    assert sniff_image(PNG) == ("png", "image/png")
-    assert sniff_image(b"RIFF\x00\x00\x00\x00WEBPVP8 ") == ("webp", "image/webp")
+def test_detect_format_by_content() -> None:
+    assert images.detect_format(b"\xff\xd8\xff\xe0rest") == "JPEG"
+    assert images.detect_format(PNG) == "PNG"
+    assert images.detect_format(b"RIFF\x00\x00\x00\x00WEBPVP8 ") == "WEBP"
     for bad in (b"", b"%PDF-1.7", b"GIF89a"):
         with pytest.raises(ApiError):
-            sniff_image(bad)
+            images.detect_format(bad)
 
 
-def test_sniff_image_size_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_detect_format_size_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "receipt_max_bytes", 10)
     with pytest.raises(ApiError) as error:
-        sniff_image(PNG)
+        images.detect_format(PNG)
     assert error.value.errors[0].code == "too_large"
 
 

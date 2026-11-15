@@ -3,8 +3,12 @@
 Rules this module enforces:
 - A draft is never a transaction. Only `confirm` writes financial records, in one database
   transaction with the line items, the receipt status and the budget recalculation.
+- Photos are sanitised before anything else (images.sanitize): only the re-encoded,
+  metadata-free JPEG is stored or sent to OCR.
 - Uploads are idempotent: the app sends its own id for each image (`client_id`, used as the
-  receipt id), so a retried upload returns the same receipt instead of a second one.
+  receipt id), so a retried upload returns the same receipt instead of a second one. A retry
+  must carry the same photo: a different photo under a used id is refused (409), and an
+  accepted photo is never replaced. See `upload_receipt` for interrupted uploads.
 - Confirmations are idempotent: the receipt row is locked, a confirmed receipt returns the
   transaction it already produced, and `transactions.receipt_id` is unique.
 - Every query filters by the caller's user_id; RLS applies too. Another user's receipt is
@@ -15,6 +19,7 @@ parser, with the per-field confidences stored at upload time.
 """
 
 import dataclasses
+import hashlib
 import logging
 from datetime import UTC, datetime
 from decimal import ROUND_DOWN, Decimal
@@ -31,7 +36,7 @@ from app.modules.analytics import products
 from app.modules.expenses import periods, transaction_service
 from app.modules.expenses import service as categories_service
 from app.modules.expenses.schemas import CategoryRef
-from app.modules.receipts import parser
+from app.modules.receipts import cleanup, images, parser
 from app.modules.receipts.models import Receipt
 from app.modules.receipts.ocr import FIXTURE, GOOGLE_VISION, OcrEngine, OcrUnavailable
 from app.modules.receipts.schemas import (
@@ -44,7 +49,7 @@ from app.modules.receipts.schemas import (
     ReviewFlag,
 )
 from app.modules.receipts.schemas import Receipt as ReceiptOut
-from app.modules.receipts.storage import ReceiptStorage, StorageUnavailable
+from app.modules.receipts.storage import ObjectExists, ReceiptStorage, StorageUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -55,28 +60,7 @@ MIN_TEXT_CHARS = 10
 LOW_CONFIDENCE = 0.8
 CENT = Decimal("0.01")
 
-IMAGE_TYPES = {  # magic bytes → (file extension, content type)
-    b"\xff\xd8\xff": ("jpg", "image/jpeg"),
-    b"\x89PNG\r\n\x1a\n": ("png", "image/png"),
-}
-
-
 # ---------- helpers ----------
-
-
-def sniff_image(data: bytes) -> tuple[str, str]:
-    """Accept only JPEG, PNG or WebP, judged by content (not the client's declared type)."""
-    if not data:
-        raise invalid_field("image", "The image is empty.", "empty")
-    if len(data) > settings.receipt_max_bytes:
-        mb = settings.receipt_max_bytes // (1024 * 1024)
-        raise invalid_field("image", f"The image is larger than {mb} MB.", "too_large")
-    for magic, kind in IMAGE_TYPES.items():
-        if data.startswith(magic):
-            return kind
-    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
-        return "webp", "image/webp"
-    raise invalid_field("image", "Use a JPEG, PNG or WebP photo.", "unsupported_type")
 
 
 def _get_own(
@@ -236,14 +220,32 @@ def upload_receipt(
     ocr: OcrEngine,
     storage: ReceiptStorage,
 ) -> tuple[ReceiptOut, bool]:
-    """Stores the image, runs OCR and returns the draft (or a failed receipt).
-    Returns (receipt, created); a repeated client_id returns the existing receipt."""
+    """Sanitises and stores the photo, runs OCR and returns the draft (or a failed receipt).
+    Returns (receipt, created).
+
+    Retries (the app resends the same `client_id` after a timeout or a lost response):
+    - The id already has a receipt: the stored photo is compared with this one. Identical
+      (same sanitised bytes, or the same original bytes for photos stored before
+      sanitising) → that receipt is returned, nothing is written. Different → 409; the
+      accepted photo and receipt are never touched.
+    - Concurrent requests with one id are serialised by the receipt's primary key: the second
+      insert waits until the first commits (→ handled as above) or rolls back (→ it proceeds).
+    - Only the request holding the new, uncommitted receipt row writes the photo, under a
+      per-path advisory lock that the orphan cleanup also takes. If an object is already at
+      the path, it is left over from an attempt that never committed (no receipt references
+      it): reused if identical, otherwise replaced. An object a committed receipt points to
+      is never replaced, because that receipt would have been found first.
+    - A failure after the photo was stored deletes it again; if that delete fails too, the
+      photo is an orphan that the next retry reuses or the daily cleanup removes.
+    """
+    clean = images.sanitize(data)  # 422 before anything is read or written
+    path = f"{user.id}/{client_id}.{clean.ext}"
+
     existing = _get_own(db, user, client_id)
     if existing is not None:
+        _require_same_photo(storage, existing.image_path, clean, data)
         return to_out(db, user, existing, storage), False
 
-    ext, content_type = sniff_image(data)
-    path = f"{user.id}/{client_id}.{ext}"
     inserted = db.scalar(
         pg_insert(Receipt)
         .values(id=client_id, user_id=user.id, image_path=path, ocr_status="processing")
@@ -255,11 +257,13 @@ def upload_receipt(
         # someone else (invisible under RLS).
         existing = _get_own(db, user, client_id)
         if existing is not None:
+            _require_same_photo(storage, existing.image_path, clean, data)
             return to_out(db, user, existing, storage), False
         raise ApiError(409, "conflict", "This upload id is already in use. Scan again.")
 
+    cleanup.lock_image_path(db, path)  # until this request's transaction ends
     try:
-        storage.put(path, data, content_type)
+        _store_photo(storage, path, clean)
     except StorageUnavailable as exc:
         raise ApiError(
             503, "service-unavailable", "We couldn't save the photo. Please try again."
@@ -267,7 +271,7 @@ def upload_receipt(
 
     try:
         try:
-            result = ocr.read(data)
+            result = ocr.read(clean.data)  # the sanitised photo: no original metadata
         except OcrUnavailable as exc:
             raise ApiError(
                 503,
@@ -301,6 +305,54 @@ def upload_receipt(
         # The receipt row is rolled back with the request; don't leave its image behind.
         _delete_quietly(storage, path)
         raise
+
+
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _require_same_photo(
+    storage: ReceiptStorage, stored_path: str, clean: images.CleanImage, original: bytes
+) -> None:
+    """409 unless this upload carries the photo the existing receipt was made from."""
+    try:
+        stored = storage.get(stored_path)
+    except StorageUnavailable as exc:
+        raise ApiError(
+            503, "service-unavailable", "We couldn't check this photo. Please try again."
+        ) from exc
+    if stored is None:
+        # The receipt stands on its own (OCR text, status); there is nothing to compare.
+        logger.warning("Receipt photo missing in storage; returning the receipt as it is")
+        return
+    if _sha256(stored) in (clean.sha256, _sha256(original)):
+        return
+    raise ApiError(
+        409,
+        "conflict",
+        "This upload id was already used for a different photo. Scan again.",
+    )
+
+
+def _store_photo(storage: ReceiptStorage, path: str, clean: images.CleanImage) -> None:
+    """Writes the photo without ever overwriting blindly. Called only by the request that
+    holds the new receipt row and the path lock (see upload_receipt)."""
+    try:
+        storage.put(path, clean.data, clean.content_type)
+        return
+    except ObjectExists:
+        pass
+    leftover = storage.get(path)
+    if leftover is not None and _sha256(leftover) == clean.sha256:
+        logger.info("Reusing the photo stored by an earlier, interrupted upload")
+        return
+    # A different (or vanished) photo from an attempt that never committed: replace it.
+    logger.info("Replacing a photo left over from an upload that never committed")
+    storage.delete(path)
+    try:
+        storage.put(path, clean.data, clean.content_type)
+    except ObjectExists as exc:  # someone else wrote it in between: never overwrite
+        raise StorageUnavailable("photo appeared again while replacing it") from exc
 
 
 def _delete_quietly(storage: ReceiptStorage, path: str) -> None:

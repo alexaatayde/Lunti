@@ -1,10 +1,12 @@
 """D5: deleting a scanned transaction removes its receipt and photo; abandoned drafts and
 orphaned photos are cleaned up (needs TEST_DATABASE_URL). OCR and storage are fakes."""
 
+import json
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, text
@@ -15,7 +17,14 @@ from app.jobs.receipt_cleanup import CLEANUP_LOCK, run_receipt_cleanup
 from app.main import app
 from app.modules.receipts import cleanup
 from app.modules.receipts.ocr import get_ocr
-from app.modules.receipts.storage import StorageUnavailable, StoredObject, get_storage
+from app.modules.receipts.storage import (
+    ObjectExists,
+    StorageUnavailable,
+    StoredObject,
+    SupabaseStorage,
+    check_path,
+    get_storage,
+)
 from app.modules.receipts.tests.test_receipts_api import (
     UNREADABLE,
     FakeOcr,
@@ -41,13 +50,22 @@ class TimedStorage:
         self.deleted: list[str] = []
 
     def put(self, path: str, data: bytes, content_type: str) -> None:
+        check_path(path)
         if self.down:
             raise StorageUnavailable
-        assert path not in self.objects
+        if path in self.objects:
+            raise ObjectExists
         self.objects[path] = data
         self.created[path] = datetime.now(UTC)
 
+    def get(self, path: str) -> bytes | None:
+        check_path(path)
+        if self.down:
+            raise StorageUnavailable
+        return self.objects.get(path)
+
     def delete(self, path: str) -> None:
+        check_path(path)
         if self.down:
             raise StorageUnavailable
         self.deleted.append(path)
@@ -321,6 +339,59 @@ def test_a_failed_photo_delete_is_retried_on_the_next_run(
     assert cleanup.delete_orphan_images(factory, lambda: storage, GRACE)["orphan_failures"] == 1
     storage.delete = real_delete  # type: ignore[method-assign]
     assert cleanup.delete_orphan_images(factory, lambda: storage, GRACE)["orphans_deleted"] == 1
+
+
+def test_orphans_across_many_pages_are_all_removed_in_one_run(
+    db_client: TestClient,
+    factory,  # noqa: ANN001
+) -> None:
+    """Supabase lists 100 objects per page by offset. Deleting while paging would shift later
+    photos onto pages already read; the whole listing is read first, so one run removes
+    every orphan."""
+    user = str(uuid.uuid4())
+    old = "2026-01-01T00:00:00.000Z"
+    objects = {f"{uuid.uuid4()}.jpg": old for _ in range(250)}
+    listed_offsets: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if request.method == "POST" and path == "/storage/v1/object/list/receipts":
+            body = json.loads(request.content)
+            if body["prefix"] == "":
+                return httpx.Response(200, json=[{"name": user, "id": None}])
+            listed_offsets.append(body["offset"])
+            names = sorted(objects)[body["offset"] : body["offset"] + body["limit"]]
+            return httpx.Response(
+                200, json=[{"name": n, "id": n, "created_at": objects[n]} for n in names]
+            )
+        if request.method == "DELETE":
+            objects.pop(path.rsplit("/", 1)[1], None)
+            return httpx.Response(200, json={})
+        return httpx.Response(500)
+
+    storage = SupabaseStorage(
+        "https://proj.supabase.co", "sb_secret_test", "receipts", httpx.MockTransport(handler)
+    )
+    result = cleanup.delete_orphan_images(factory, lambda: storage, GRACE)
+
+    assert listed_offsets == [0, 100, 200]
+    assert result["orphans_deleted"] == 250 and objects == {}
+
+
+def test_a_photo_an_upload_is_using_is_never_deleted(
+    db_client: TestClient,
+    storage: TimedStorage,
+    factory,  # noqa: ANN001
+) -> None:
+    path = f"{uuid.uuid4()}/{uuid.uuid4()}.jpg"
+    storage.add(path, timedelta(days=3))  # old and unreferenced (so far)
+    with factory() as upload_session, upload_session.begin():
+        cleanup.lock_image_path(upload_session, path)  # an upload is about to reference it
+        busy = cleanup.delete_orphan_images(factory, lambda: storage, GRACE)
+        assert busy["images_in_use"] == 1 and busy["orphans_deleted"] == 0
+        assert path in storage.objects
+    done = cleanup.delete_orphan_images(factory, lambda: storage, GRACE)
+    assert done["orphans_deleted"] == 1 and path not in storage.objects
 
 
 # ---------- abandoned drafts ----------

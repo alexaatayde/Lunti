@@ -10,6 +10,11 @@
 The database never waits on storage: rows are deleted and committed first, photos follow.
 A photo that fails to delete is only ever an orphan, which the next run removes. Running
 either pass again finds nothing left to do.
+
+Uploads and the orphan pass coordinate through a per-path advisory lock (`lock_image_path`):
+an upload holds it from inserting its receipt row until its transaction ends, and the orphan
+pass skips any photo whose lock it can't take, so a photo an upload is about to reference is
+never deleted.
 """
 
 import logging
@@ -17,13 +22,13 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import event, func, select
+from sqlalchemy import event, func, literal, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.auth import CurrentUser
 from app.core.db import scope_session_to_user
 from app.modules.receipts.models import Receipt
-from app.modules.receipts.storage import RECEIPT_PATH, ReceiptStorage
+from app.modules.receipts.storage import ReceiptStorage, is_receipt_path
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +36,23 @@ StorageFactory = Callable[[], ReceiptStorage]
 
 UNCONFIRMED = ("processing", "draft", "failed")
 _PENDING = "lunti_receipt_images_to_delete"
+
+
+# ---------- per-photo lock ----------
+
+
+def _path_key(path: str):  # noqa: ANN202 - SQL expression
+    return func.hashtextextended(literal(f"lunti:receipt-image:{path}"), 0)
+
+
+def lock_image_path(db: Session, path: str) -> None:
+    """Hold the photo's lock until this transaction ends (waits for a cleanup in progress)."""
+    db.execute(select(func.pg_advisory_xact_lock(_path_key(path))))
+
+
+def try_lock_image_path(db: Session, path: str) -> bool:
+    """Take the photo's lock for this transaction, or False if an upload holds it."""
+    return bool(db.scalar(select(func.pg_try_advisory_xact_lock(_path_key(path)))))
 
 
 # ---------- delete after commit ----------
@@ -127,28 +149,41 @@ def delete_orphan_images(
     factory: sessionmaker[Session], storage: StorageFactory, grace: timedelta
 ) -> dict[str, int]:
     """Photos older than `grace` that no receipt row references. Only names receipts create
-    ({user_id}/{receipt_id}.{ext}); anything else in the bucket is left alone."""
-    counts = {"orphans_deleted": 0, "images_kept": 0, "ignored_names": 0, "orphan_failures": 0}
+    ({user_id}/{receipt_id}.{ext}); anything else in the bucket is left alone.
+
+    The whole listing is read before anything is deleted: the storage list is paginated by
+    offset, and deleting while paging would shift later photos onto pages already read."""
+    counts = {
+        "orphans_deleted": 0,
+        "images_kept": 0,
+        "images_in_use": 0,
+        "ignored_names": 0,
+        "orphan_failures": 0,
+    }
     with factory() as db:
         cutoff = _db_now(db) - grace
-    for obj in storage().list_objects():
-        if not RECEIPT_PATH.match(obj.path):
+    objects = list(storage().list_objects())
+    for obj in objects:
+        if not is_receipt_path(obj.path):
             counts["ignored_names"] += 1
             continue
         if obj.created_at >= cutoff:  # recent: an upload may still be committing
             counts["images_kept"] += 1
             continue
-        with factory() as db:
+        with factory() as db, db.begin():
+            if not try_lock_image_path(db, obj.path):  # an upload is using this path now
+                counts["images_in_use"] += 1
+                continue
             referenced = db.scalar(select(Receipt.id).where(Receipt.image_path == obj.path))
-        if referenced is not None:
-            counts["images_kept"] += 1
-            continue
-        try:
-            storage().delete(obj.path)
-            counts["orphans_deleted"] += 1
-        except Exception:  # noqa: BLE001 - retried on the next run
-            counts["orphan_failures"] += 1
-            logger.warning("Orphaned receipt photo not deleted; next run retries")
+            if referenced is not None:
+                counts["images_kept"] += 1
+                continue
+            try:
+                storage().delete(obj.path)  # still holding the lock
+                counts["orphans_deleted"] += 1
+            except Exception:  # noqa: BLE001 - retried on the next run
+                counts["orphan_failures"] += 1
+                logger.warning("Orphaned receipt photo not deleted; next run retries")
     return counts
 
 
