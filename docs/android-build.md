@@ -96,8 +96,11 @@ signed with the template's debug keystore, so it creates no signing credentials.
 `density`, `fontWeightAdjustment`, `locale` and `layoutDirection`. Without them, changing the
 system font size, display size, bold text or language recreated the activity, mounted a second
 React root, and the next navigation tap crashed the release build ("The imperative router is
-unavailable before the first render has finished"). Trade-off: screens already rendered keep
-their text size until they re-render.
+unavailable before the first render has finished"). `plugins/withFontScaleRefresh.ts` adds an
+`onConfigurationChanged` override to MainActivity that asks React Native's DeviceInfo module to
+re-read the font scale, so a font-size change made while Lunti stays on screen reaches JS at once
+(text, `useWindowDimensions`, `useLargeText`) without recreating the activity. Both plugins need a
+native build; Expo Go does not include them.
 
 Debug-only differences: the dev client asks for "Nearby devices" (`ACCESS_LOCAL_NETWORK`, to reach
 Metro) and shows a draggable **Tools** button that can cover the header's Profile button. Neither

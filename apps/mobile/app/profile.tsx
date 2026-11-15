@@ -16,25 +16,16 @@ import { useMe, type Me } from '../src/api/hooks';
 import {
   AppText,
   BellIcon,
-  BottomNav,
   Card,
   ChevronRightIcon,
   SegmentedControl,
-  type TabKey,
 } from '../src/components';
 import { signOut } from '../src/features/auth/authService';
+import { StackBottomNav } from '../src/features/navigation/activeTab';
 import { ErrorState, LoadingBlocks } from '../src/features/money/StateViews';
 import { formatLongDate } from '../src/lib/dates';
 import { versionText } from '../src/lib/env';
 import { colors, font, radius, sizes, spacing } from '../src/theme';
-
-const tabHref = {
-  analytics: '/analytics',
-  budget: '/budget',
-  home: '/home',
-  meals: '/meals',
-  transactions: '/transactions',
-} as const satisfies Record<TabKey, string>;
 
 /** "A" for "Alex Reyes", else the email's first letter, else "?". */
 function initialOf(name: string | null | undefined, email: string | null | undefined) {
@@ -91,11 +82,7 @@ export default function ProfileScreen() {
 
         <LogOutCard />
       </ScrollView>
-      <BottomNav
-        active="budget"
-        bottomInset={insets.bottom}
-        onSelect={(tab) => router.navigate(tabHref[tab])}
-      />
+      <StackBottomNav bottomInset={insets.bottom} />
     </View>
   );
 }

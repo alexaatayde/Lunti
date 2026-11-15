@@ -126,6 +126,21 @@ describe('app.config.ts', () => {
     }
   });
 
+  it('registers the MainActivity font-scale refresh mod for every variant, with configChanges', () => {
+    const configs = [
+      evaluate({}),
+      evaluate({ ...SAFE_RELEASE, APP_VARIANT: 'preview' }),
+      evaluate({ ...SAFE_RELEASE, APP_VARIANT: 'production' }),
+    ];
+    for (const config of configs) {
+      const { mods } = config as {
+        mods?: { android?: { manifest?: unknown; mainActivity?: unknown } };
+      };
+      expect(typeof mods?.android?.mainActivity).toBe('function');
+      expect(typeof mods?.android?.manifest).toBe('function');
+    }
+  });
+
   it('does not put a scheme in app.json (each variant sets its own)', () => {
     expect(appJson.expo.scheme).toBeUndefined();
   });

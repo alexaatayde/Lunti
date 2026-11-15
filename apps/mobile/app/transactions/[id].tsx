@@ -1,5 +1,5 @@
 /** TransactionDetail (TxnDetail.html) with the delete dialog (TxnDelete.html). Keeps the nav. */
-import { router, useLocalSearchParams, type Href } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,7 +9,6 @@ import {
   AlertDialog,
   AppText,
   Badge,
-  BottomNav,
   Card,
   ChevronLeftIcon,
   Chip,
@@ -17,23 +16,15 @@ import {
   ProgressBar,
   TintCard,
   TrashIcon,
-  type TabKey,
 } from '../../src/components';
 import { remainingText } from '../../src/features/money/budgetDisplay';
 import { CategoryIcon, categoryColor } from '../../src/features/money/CategoryIcon';
 import { ErrorState, LoadingBlocks } from '../../src/features/money/StateViews';
 import { useDeleteWithUndo } from '../../src/features/money/useDeleteWithUndo';
+import { StackBottomNav } from '../../src/features/navigation/activeTab';
 import { formatPeriod, formatRelativeDay, formatTime } from '../../src/lib/dates';
 import { formatMoney, isNegativeMoney } from '../../src/lib/money';
 import { colors, font, radius, spacing } from '../../src/theme';
-
-const tabHref: Record<TabKey, Href> = {
-  analytics: '/analytics',
-  budget: '/budget',
-  home: '/home',
-  meals: '/meals',
-  transactions: '/transactions',
-};
 
 function back() {
   if (router.canGoBack()) router.back();
@@ -220,11 +211,7 @@ export default function TransactionDetailScreen() {
         loading={deletion.isPending}
       />
 
-      <BottomNav
-        active="transactions"
-        bottomInset={insets.bottom}
-        onSelect={(tab) => router.navigate(tabHref[tab])}
-      />
+      <StackBottomNav bottomInset={insets.bottom} />
     </View>
   );
 }
