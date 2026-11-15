@@ -1,4 +1,6 @@
-"""Daily receipt cleanup (D5): abandoned drafts, then orphaned photos (receipts.cleanup).
+"""Daily receipt cleanup (D5): abandoned drafts and uploads, recognised-text retention (only
+when RECEIPT_RAW_TEXT_RETENTION_DAYS is set), old per-user OCR counters, then orphaned photos
+(receipts.cleanup).
 
 Runs from the scheduler at RECEIPT_CLEANUP_HOUR:00 Asia/Manila when SCHEDULER_ENABLED, or by
 hand: `python -m scripts.cleanup_receipts`. A Postgres advisory lock lets one run at a time;
@@ -54,6 +56,16 @@ def run_receipt_cleanup(
             return counts
         try:
             counts |= cleanup.delete_stale_drafts(factory, storage, retention)
+            counts |= cleanup.delete_abandoned_processing(
+                factory,
+                storage,
+                timedelta(minutes=settings.receipt_processing_abandon_minutes),
+            )
+            if settings.receipt_raw_text_retention_days > 0:
+                counts |= cleanup.purge_raw_text(
+                    factory, timedelta(days=settings.receipt_raw_text_retention_days)
+                )
+            counts |= cleanup.prune_usage_counters(factory, settings.ocr_usage_user_retention_days)
             try:
                 counts |= cleanup.delete_orphan_images(factory, storage, grace)
             except StorageUnavailable:

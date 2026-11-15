@@ -5662,7 +5662,7 @@
               },
               "application/problem+json": {}
             },
-            "description": "Too many requests; wait `Retry-After` seconds.",
+            "description": "Too many requests, or today's scan limit is reached (type ocr-daily-limit); wait `Retry-After` seconds.",
             "headers": {
               "Retry-After": {
                 "description": "Seconds to wait.",

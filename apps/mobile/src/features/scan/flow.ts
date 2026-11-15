@@ -60,6 +60,11 @@ export function useHardwareBack(onBack: (() => void) | null) {
 export function uploadMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 413) return 'This photo is too large. Try another one.';
+    // Today's scan limit (Phase 8D.4a): the server's message says the limit and that the
+    // expense can still be added manually; Retry-After (until midnight) is not useful here.
+    if (error.status === 429 && error.problem?.type === 'urn:lunti:problem:ocr-daily-limit') {
+      return error.problem.detail ?? "You've reached today's scan limit. Add this expense manually.";
+    }
     if (error.kind === 'validation') {
       return error.problem?.errors?.[0]?.message ?? "This photo can't be used. Try another one.";
     }

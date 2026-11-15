@@ -6,6 +6,15 @@
   RECEIPT_DRAFT_RETENTION_DAYS are deleted with their photos.
 - `delete_orphan_images`: photos older than RECEIPT_ORPHAN_GRACE_HOURS that no receipt row
   references are deleted. This also retries any photo whose after-commit delete failed.
+- `delete_abandoned_processing` (Phase 8D.4a): `processing` receipts whose upload died (lease
+  expired, no progress for RECEIPT_PROCESSING_ABANDON_MINUTES) are deleted with their photos.
+  A receipt an upload still holds a live lease on is never touched.
+- `purge_raw_text` (Phase 8D.4a): only when RECEIPT_RAW_TEXT_RETENTION_DAYS is set, the
+  recognised text of receipts confirmed longer ago than that is removed (set NULL, with
+  `ocr_text_purged_at`). The receipt row, photo, transaction and items are kept.
+- `prune_usage_counters`: per-user daily OCR counters older than
+  OCR_USAGE_USER_RETENTION_DAYS (only today's row matters for the limit). App-wide
+  counters, which hold no personal data, are kept for the usage report.
 
 The database never waits on storage: rows are deleted and committed first, photos follow.
 A photo that fails to delete is only ever an orphan, which the next run removes. Running
@@ -19,15 +28,16 @@ never deleted.
 
 import logging
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import event, func, literal, select
+from sqlalchemy import ColumnElement, and_, delete, event, func, literal, or_, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.auth import CurrentUser
 from app.core.db import scope_session_to_user
-from app.modules.receipts.models import Receipt
+from app.modules.receipts import quota
+from app.modules.receipts.models import OcrUsageDaily, Receipt
 from app.modules.receipts.storage import ReceiptStorage, is_receipt_path
 
 logger = logging.getLogger(__name__)
@@ -107,42 +117,115 @@ def delete_for_transaction(
 # ---------- scheduled / manual cleanup ----------
 
 
-def delete_stale_drafts(
-    factory: sessionmaker[Session], storage: StorageFactory, retention: timedelta
+def _no_live_lease() -> ColumnElement[bool]:
+    """Not held by an upload right now (its OCR result may still arrive)."""
+    return or_(Receipt.ocr_lease_expires_at.is_(None), Receipt.ocr_lease_expires_at < func.now())
+
+
+def stale_draft_condition(retention: timedelta) -> ColumnElement[bool]:
+    return and_(
+        Receipt.ocr_status.in_(UNCONFIRMED),
+        Receipt.created_at < func.now() - retention,
+        _no_live_lease(),
+    )
+
+
+def abandoned_processing_condition(abandon: timedelta) -> ColumnElement[bool]:
+    return and_(
+        Receipt.ocr_status == "processing",
+        Receipt.updated_at < func.now() - abandon,
+        _no_live_lease(),
+    )
+
+
+def raw_text_purge_condition(retention: timedelta) -> ColumnElement[bool]:
+    return and_(
+        Receipt.ocr_status == "confirmed",
+        Receipt.confirmed_at < func.now() - retention,
+        Receipt.ocr_raw_text.is_not(None),
+    )
+
+
+def _delete_receipts(
+    factory: sessionmaker[Session],
+    storage: StorageFactory,
+    condition: ColumnElement[bool],
+    name: str,
 ) -> dict[str, int]:
-    """Unconfirmed receipts older than `retention` (server time), with their photos."""
-    counts = {"stale_drafts_deleted": 0, "stale_drafts_skipped": 0}
+    counts = {f"{name}_deleted": 0, f"{name}_skipped": 0}
     with factory() as db:
-        candidates = db.execute(
-            select(Receipt.id, Receipt.user_id).where(
-                Receipt.ocr_status.in_(UNCONFIRMED),
-                Receipt.created_at < func.now() - retention,
-            )
-        ).all()
+        candidates = db.execute(select(Receipt.id, Receipt.user_id).where(condition)).all()
     for receipt_id, user_id in candidates:
         with factory() as db, db.begin():
             scope_session_to_user(db, user_id)  # app role + RLS: this user's row only
-            # SKIP LOCKED: a confirm holds this row; leave it. Conditions re-checked under
-            # the lock, so a receipt confirmed meanwhile is never touched.
+            # SKIP LOCKED: a confirm or discard holds this row; leave it. Conditions are
+            # re-checked under the lock, so a receipt confirmed (or re-leased) meanwhile is
+            # never touched.
             row = db.scalar(
                 select(Receipt)
-                .where(
-                    Receipt.id == receipt_id,
-                    Receipt.user_id == user_id,
-                    Receipt.ocr_status.in_(UNCONFIRMED),
-                    Receipt.created_at < func.now() - retention,
-                )
+                .where(Receipt.id == receipt_id, Receipt.user_id == user_id, condition)
                 .with_for_update(skip_locked=True)
             )
             if row is None:
-                counts["stale_drafts_skipped"] += 1
+                counts[f"{name}_skipped"] += 1
                 continue
             path = row.image_path
             db.delete(row)
             db.flush()
             delete_after_commit(db, storage, path)
-        counts["stale_drafts_deleted"] += 1
+        counts[f"{name}_deleted"] += 1
     return counts
+
+
+def delete_stale_drafts(
+    factory: sessionmaker[Session], storage: StorageFactory, retention: timedelta
+) -> dict[str, int]:
+    """Unconfirmed receipts older than `retention` (server time), with their photos."""
+    return _delete_receipts(factory, storage, stale_draft_condition(retention), "stale_drafts")
+
+
+def delete_abandoned_processing(
+    factory: sessionmaker[Session], storage: StorageFactory, abandon: timedelta
+) -> dict[str, int]:
+    """`processing` receipts whose upload died and that nobody retried, with their photos."""
+    return _delete_receipts(
+        factory, storage, abandoned_processing_condition(abandon), "abandoned_processing"
+    )
+
+
+def purge_raw_text(factory: sessionmaker[Session], retention: timedelta) -> dict[str, int]:
+    """Removes the recognised text of receipts confirmed more than `retention` ago. The
+    structured data (transaction, items, receipt status, photo) is not touched."""
+    condition = raw_text_purge_condition(retention)
+    with factory() as db:
+        users = db.scalars(select(Receipt.user_id).where(condition).distinct()).all()
+    purged = 0
+    for user_id in users:
+        with factory() as db, db.begin():
+            scope_session_to_user(db, user_id)
+            result = db.execute(
+                update(Receipt)
+                .where(Receipt.user_id == user_id, condition)
+                .values(ocr_raw_text=None, ocr_text_purged_at=func.now())
+                .execution_options(synchronize_session=False)
+            )
+            purged += result.rowcount or 0
+    return {"raw_text_purged": purged}
+
+
+def prune_usage_counters(
+    factory: sessionmaker[Session], keep_days: int, *, today: date | None = None
+) -> dict[str, int]:
+    """Per-user OCR counters older than `keep_days` (Manila days). Runs as the table owner:
+    the app role has no access to the counters."""
+    cutoff = (today or quota.usage_day()) - timedelta(days=keep_days)
+    with factory() as db, db.begin():
+        result = db.execute(
+            delete(OcrUsageDaily).where(
+                OcrUsageDaily.counter == "user_scans", OcrUsageDaily.usage_date < cutoff
+            )
+        )
+    return {"usage_counters_pruned": result.rowcount or 0}
 
 
 def delete_orphan_images(

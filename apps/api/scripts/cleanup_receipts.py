@@ -25,14 +25,19 @@ def dry_run() -> dict[str, int]:
     factory = get_session_factory()
     retention = timedelta(days=settings.receipt_draft_retention_days)
     grace = timedelta(hours=settings.receipt_orphan_grace_hours)
+    abandon = timedelta(minutes=settings.receipt_processing_abandon_minutes)
+    text_days = settings.receipt_raw_text_retention_days
+
+    def count(condition) -> int:  # noqa: ANN001 - SQL expression
+        return db.scalar(select(func.count()).select_from(Receipt).where(condition)) or 0
+
     with factory() as db:
-        drafts = db.scalar(
-            select(func.count())
-            .select_from(Receipt)
-            .where(
-                Receipt.ocr_status.in_(cleanup.UNCONFIRMED),
-                Receipt.created_at < func.now() - retention,
-            )
+        drafts = count(cleanup.stale_draft_condition(retention))
+        abandoned = count(cleanup.abandoned_processing_condition(abandon))
+        purgeable = (
+            count(cleanup.raw_text_purge_condition(timedelta(days=text_days)))
+            if text_days > 0
+            else 0
         )
         cutoff = db.scalar(select(func.now())) - grace
         referenced = set(db.scalars(select(Receipt.image_path)))
@@ -41,7 +46,12 @@ def dry_run() -> dict[str, int]:
         for o in get_storage().list_objects()
         if is_receipt_path(o.path) and o.created_at < cutoff and o.path not in referenced
     )
-    return {"stale_drafts": drafts or 0, "orphaned_images": orphans}
+    return {
+        "stale_drafts": drafts,
+        "abandoned_processing": abandoned,
+        "raw_text_purgeable": purgeable,
+        "orphaned_images": orphans,
+    }
 
 
 def main() -> None:

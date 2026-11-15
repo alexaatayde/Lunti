@@ -1,6 +1,6 @@
 from functools import cached_property
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -47,12 +47,41 @@ class Settings(BaseSettings):
     receipt_draft_retention_days: int = Field(default=7, ge=1)
     # Hour (Asia/Manila) for the daily receipt cleanup when the scheduler is on.
     receipt_cleanup_hour: int = Field(default=3, ge=0, le=23)
-    # "google" (default; needs GOOGLE_APPLICATION_CREDENTIALS) or "fixture" (development
-    # only: returns the stored text of known synthetic receipt images in OCR_FIXTURE_DIR).
-    ocr_provider: str = "google"
+    # "google" (Google Cloud Vision, billed), "fixture" (development only: returns the
+    # stored text of known synthetic receipt images in OCR_FIXTURE_DIR) or "disabled".
+    # Empty = "google" when APP_ENV=production, otherwise "disabled": a development API
+    # never calls the paid service unless OCR_PROVIDER=google is set explicitly.
+    ocr_provider: str = ""
     ocr_fixture_dir: str = "tests/fixtures/receipts"
+    # How the Vision client authenticates: "service_account_file" (the JSON key named by
+    # GOOGLE_APPLICATION_CREDENTIALS, kept outside the repository, mode 600) or
+    # "application_default" (keyless: the runtime's attached service account / workload
+    # identity; preferred for deployed infrastructure).
+    google_vision_auth: str = "service_account_file"
     # Below this mean word confidence (0–1) a scan is treated as unreadable.
     ocr_min_confidence: float = 0.5
+    # One Vision request, no automatic retries (each retry could be billed).
+    ocr_timeout_seconds: float = Field(default=25.0, gt=0, le=120)
+    # How long an upload may hold a `processing` receipt before a retry can take it over
+    # (after a crash). Must cover the OCR timeout plus storage and database time.
+    ocr_lease_seconds: int = Field(default=60, ge=10, le=900)
+    # A duplicate upload of a receipt that is still being read waits this long for the
+    # result, then gets 503 + Retry-After.
+    ocr_wait_seconds: float = Field(default=20.0, ge=0, le=120)
+    ocr_poll_seconds: float = Field(default=0.5, gt=0, le=10)
+    # Daily OCR limits (Asia/Manila days; receipts/quota.py), kept in the database. Per user:
+    # OCR runs of any engine. App-wide: requests to the billed OCR service (0 = none).
+    ocr_user_daily_limit: int = Field(default=50, ge=0)
+    ocr_global_daily_limit: int = Field(default=50, ge=0)
+    # Recognised text of confirmed receipts is removed this many days after confirmation by
+    # the receipt cleanup (the transaction and its items stay). 0 = keep (no purge). Approved
+    # policy (2026-11-15): 30, set only after migration 0006 is live and a dry run is reviewed.
+    receipt_raw_text_retention_days: int = Field(default=0, ge=0)
+    # `processing` receipts whose upload died (lease expired) are deleted, with their photo,
+    # after this many minutes without progress.
+    receipt_processing_abandon_minutes: int = Field(default=60, ge=5)
+    # Per-user OCR counters are only needed for today's limit; older rows are deleted.
+    ocr_usage_user_retention_days: int = Field(default=31, ge=1)
     receipt_max_bytes: int = 10 * 1024 * 1024
 
     # Purchase-pattern data tiers (AGENTS.md §7.3; approved 2026-11-12, configurable).
@@ -91,7 +120,9 @@ class Settings(BaseSettings):
     # commas (units: second, minute, hour, day); empty = no limit for that endpoint. Counts are
     # kept per API process.
     rate_limit_enabled: bool = True
-    rate_limit_receipt_upload: str = "10/minute,50/day"  # each new upload may call Vision OCR
+    # Burst limit only: the daily scan limit is OCR_USER_DAILY_LIMIT, kept in the database so
+    # it survives restarts and isn't used up by retries that never reach OCR.
+    rate_limit_receipt_upload: str = "10/minute"
     rate_limit_receipt_confirm: str = "30/minute"
     rate_limit_transaction_create: str = "30/minute,500/day"
 
@@ -118,6 +149,19 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env.strip().lower() == "production"
+
+    @property
+    def resolved_ocr_provider(self) -> str:
+        provider = self.ocr_provider.strip().lower()
+        if provider:
+            return provider
+        return "google" if self.is_production else "disabled"
+
+    @model_validator(mode="after")
+    def _lease_covers_ocr(self) -> "Settings":
+        if self.ocr_lease_seconds < self.ocr_timeout_seconds + 10:
+            raise ValueError("OCR_LEASE_SECONDS must be at least OCR_TIMEOUT_SECONDS + 10")
+        return self
 
     @cached_property
     def sqlalchemy_database_url(self) -> str:

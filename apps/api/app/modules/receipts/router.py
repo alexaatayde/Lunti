@@ -4,10 +4,11 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Response, UploadFile, status
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.auth import CurrentUserDep
 from app.core.config import settings
-from app.core.db import UserDbDep
+from app.core.db import UserDbDep, get_session_factory
 from app.core.errors import PROBLEM_JSON, PROBLEM_RESPONSES, Problem
 from app.core.rate_limit import RATE_LIMIT_RESPONSE, rate_limited
 from app.modules.receipts import service
@@ -22,6 +23,8 @@ _NOT_FOUND = {404: {**_problem, "description": "Receipt not found."}}
 
 OcrDep = Annotated[OcrEngine, Depends(get_ocr)]
 StorageDep = Annotated[ReceiptStorage, Depends(get_storage)]
+# Upload opens its own short transactions, so OCR never runs inside one (service.py).
+SessionFactoryDep = Annotated[sessionmaker[Session], Depends(get_session_factory)]
 
 
 @router.post(
@@ -36,12 +39,17 @@ StorageDep = Annotated[ReceiptStorage, Depends(get_storage)]
         409: {**_problem, "description": "The client_id is already used."},
         413: {**_problem, "description": "The upload is too large."},
         **RATE_LIMIT_RESPONSE,
+        429: {
+            **RATE_LIMIT_RESPONSE[429],
+            "description": "Too many requests, or today's scan limit is reached "
+            "(type ocr-daily-limit); wait `Retry-After` seconds.",
+        },
     },
 )
 def upload_receipt(
     response: Response,
     user: CurrentUserDep,
-    db: UserDbDep,
+    factory: SessionFactoryDep,
     ocr: OcrDep,
     storage: StorageDep,
     image: Annotated[UploadFile, File(description="JPEG, PNG or WebP photo of the receipt.")],
@@ -51,7 +59,7 @@ def upload_receipt(
 ) -> Receipt:
     data = image.file.read(settings.receipt_max_bytes + 1)
     receipt, created = service.upload_receipt(
-        db, user, client_id=client_id, data=data, ocr=ocr, storage=storage
+        factory, user, client_id=client_id, data=data, ocr=ocr, storage=storage
     )
     if not created:
         response.status_code = status.HTTP_200_OK

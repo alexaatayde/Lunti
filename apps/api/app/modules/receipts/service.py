@@ -5,6 +5,11 @@ Rules this module enforces:
   transaction with the line items, the receipt status and the budget recalculation.
 - Photos are sanitised before anything else (images.sanitize): only the re-encoded,
   metadata-free JPEG is stored or sent to OCR.
+- OCR runs outside any database transaction (see "upload" below): the receipt is committed
+  as `processing` with a lease first, and the result is written only by the attempt that
+  still holds it. Each OCR call first takes one attempt from the daily quota (quota.py).
+- Recognised text is redacted (redaction.py) before it is parsed or stored; it is never
+  returned by the API or written to logs.
 - Uploads are idempotent: the app sends its own id for each image (`client_id`, used as the
   receipt id), so a retried upload returns the same receipt instead of a second one. A retry
   must carry the same photo: a different photo under a used id is refused (409), and an
@@ -21,24 +26,36 @@ parser, with the per-field confidences stored at upload time.
 import dataclasses
 import hashlib
 import logging
-from datetime import UTC, datetime
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
-from uuid import UUID
+from typing import Literal
+from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.auth import CurrentUser
 from app.core.config import settings
+from app.core.db import scope_session_to_user
 from app.core.errors import ApiError, FieldError, invalid_field, not_found
 from app.modules.analytics import products
 from app.modules.expenses import periods, transaction_service
 from app.modules.expenses import service as categories_service
 from app.modules.expenses.schemas import CategoryRef
-from app.modules.receipts import cleanup, images, parser
+from app.modules.receipts import cleanup, images, parser, quota, redaction
 from app.modules.receipts.models import Receipt
-from app.modules.receipts.ocr import FIXTURE, GOOGLE_VISION, OcrEngine, OcrUnavailable
+from app.modules.receipts.ocr import (
+    FIXTURE,
+    GOOGLE_VISION,
+    OcrEngine,
+    OcrUnavailable,
+    is_external,
+)
 from app.modules.receipts.schemas import (
     Confidence,
     DraftItem,
@@ -209,10 +226,168 @@ def get_receipt(
 
 
 # ---------- upload ----------
+#
+# The upload never holds a database transaction (or a pooled connection) while it waits for
+# storage or OCR. It works in short transactions around the external calls:
+#
+#   1. claim     insert the receipt as `processing` with a lease (ocr_attempt_id + expiry),
+#                commit. A retry of the same client_id finds the row: finished → return it;
+#                leased by a live attempt → wait for it; lease expired (crashed process,
+#                timeout) → take it over.
+#   2. photo     store the sanitised photo (no transaction).
+#   3. reserve   renew the lease and take one OCR attempt from today's quota, commit.
+#   4. OCR       no transaction, no connection.
+#   5. finish    write the result only if this attempt still holds the lease
+#                (`where ocr_attempt_id = :attempt`). A receipt discarded meanwhile stays
+#                deleted, and its photo is removed again; a receipt taken over by another
+#                attempt is left to that attempt.
+#
+# A failure before the result is written deletes the row (and the photo, except after a
+# storage failure where the retry reuses it), so a retry starts cleanly, as before.
+
+UPLOAD_WAIT_DETAIL = "This receipt is still being read. Please try again in a moment."
+MAX_LOST_CLAIMS = 2  # OCR runs per request at most, even if leases keep being taken over
+
+
+@dataclass(frozen=True)
+class _Claim:
+    kind: Literal["new", "takeover", "busy", "done", "foreign"]
+    image_path: str = ""
+    attempt_id: UUID | None = None
+
+
+@contextmanager
+def _user_tx(factory: sessionmaker[Session], user: CurrentUser) -> Iterator[Session]:
+    """One short transaction as the app role, scoped to the caller (RLS), like a request."""
+    with factory() as db, db.begin():
+        scope_session_to_user(db, user.id)
+        yield db
+
+
+def _lease_end():  # noqa: ANN202 - SQL expression
+    return func.now() + timedelta(seconds=settings.ocr_lease_seconds)
+
+
+def _claim(factory: sessionmaker[Session], user: CurrentUser, client_id: UUID, path: str) -> _Claim:
+    attempt = uuid4()
+    with _user_tx(factory, user) as db:
+        row = _get_own(db, user, client_id)
+        if row is None:
+            # The path lock makes the orphan cleanup either finish with this path first or
+            # see the committed row afterwards (cleanup.delete_orphan_images).
+            cleanup.lock_image_path(db, path)
+            inserted = db.scalar(
+                pg_insert(Receipt)
+                .values(
+                    id=client_id,
+                    user_id=user.id,
+                    image_path=path,
+                    ocr_status="processing",
+                    ocr_attempt_id=attempt,
+                    ocr_lease_expires_at=_lease_end(),
+                )
+                .on_conflict_do_nothing(index_elements=["id"])
+                .returning(Receipt.id)
+            )
+            if inserted is not None:
+                return _Claim("new", path, attempt)
+            # A concurrent request with this id committed first, or the id belongs to
+            # someone else (invisible under RLS).
+            row = _get_own(db, user, client_id)
+            if row is None:
+                return _Claim("foreign")
+        if row.ocr_status != "processing":
+            return _Claim("done", row.image_path)
+        cleanup.lock_image_path(db, row.image_path)
+        taken = db.scalar(
+            update(Receipt)
+            .where(
+                Receipt.id == client_id,
+                Receipt.user_id == user.id,
+                Receipt.ocr_status == "processing",
+                or_(
+                    Receipt.ocr_lease_expires_at.is_(None),
+                    Receipt.ocr_lease_expires_at <= func.now(),
+                ),
+            )
+            .values(ocr_attempt_id=attempt, ocr_lease_expires_at=_lease_end())
+            .returning(Receipt.id)
+            .execution_options(synchronize_session=False)
+        )
+        if taken is None:
+            return _Claim("busy", row.image_path)
+        logger.info("Taking over a receipt whose earlier upload never finished")
+        return _Claim("takeover", row.image_path, attempt)
+
+
+def _held(attempt: UUID):  # noqa: ANN202 - SQL expression
+    return and_(
+        Receipt.ocr_status == "processing",
+        Receipt.ocr_attempt_id == attempt,
+        Receipt.ocr_lease_expires_at > func.now(),
+    )
+
+
+def _abandon(
+    factory: sessionmaker[Session],
+    user: CurrentUser,
+    client_id: UUID,
+    attempt: UUID,
+    storage: ReceiptStorage,
+    *,
+    delete_photo: bool,
+    reservation: quota.Reservation | None = None,
+) -> None:
+    """Undo this attempt's receipt (only while it still owns it), so a retry starts cleanly.
+    Never raises: the caller is already reporting the original error."""
+    try:
+        with _user_tx(factory, user) as db:
+            if reservation is not None:
+                quota.record_outcome(db, reservation, "failed")
+            path = db.scalar(
+                delete(Receipt)
+                .where(
+                    Receipt.id == client_id,
+                    Receipt.user_id == user.id,
+                    Receipt.ocr_status == "processing",
+                    Receipt.ocr_attempt_id == attempt,
+                )
+                .returning(Receipt.image_path)
+                .execution_options(synchronize_session=False)
+            )
+    except Exception:  # noqa: BLE001 - the lease expires; cleanup removes it later
+        logger.warning("Couldn't undo an unfinished receipt; its lease will expire")
+        return
+    if path is not None and delete_photo:
+        _delete_quietly(storage, path)
+
+
+def _release(
+    factory: sessionmaker[Session], user: CurrentUser, client_id: UUID, attempt: UUID
+) -> None:
+    """Give up the lease but keep the receipt (another upload's photo is stored for it)."""
+    try:
+        with _user_tx(factory, user) as db:
+            db.execute(
+                update(Receipt)
+                .where(Receipt.id == client_id, Receipt.user_id == user.id, _held(attempt))
+                .values(ocr_attempt_id=None, ocr_lease_expires_at=None)
+                .execution_options(synchronize_session=False)
+            )
+    except Exception:  # noqa: BLE001 - the lease expires on its own
+        logger.warning("Couldn't release a receipt lease; it will expire")
+
+
+def _read_out(
+    factory: sessionmaker[Session], user: CurrentUser, client_id: UUID, storage: ReceiptStorage
+) -> ReceiptOut | None:
+    with _user_tx(factory, user) as db:
+        row = _get_own(db, user, client_id)
+        return None if row is None else to_out(db, user, row, storage)
 
 
 def upload_receipt(
-    db: Session,
+    factory: sessionmaker[Session],
     user: CurrentUser,
     *,
     client_id: UUID,
@@ -221,90 +396,200 @@ def upload_receipt(
     storage: ReceiptStorage,
 ) -> tuple[ReceiptOut, bool]:
     """Sanitises and stores the photo, runs OCR and returns the draft (or a failed receipt).
-    Returns (receipt, created).
+    Returns (receipt, created). See the section comment above for the transaction steps.
 
     Retries (the app resends the same `client_id` after a timeout or a lost response):
-    - The id already has a receipt: the stored photo is compared with this one. Identical
+    - The id has a finished receipt: the stored photo is compared with this one. Identical
       (same sanitised bytes, or the same original bytes for photos stored before
       sanitising) → that receipt is returned, nothing is written. Different → 409; the
       accepted photo and receipt are never touched.
-    - Concurrent requests with one id are serialised by the receipt's primary key: the second
-      insert waits until the first commits (→ handled as above) or rolls back (→ it proceeds).
-    - Only the request holding the new, uncommitted receipt row writes the photo, under a
-      per-path advisory lock that the orphan cleanup also takes. If an object is already at
-      the path, it is left over from an attempt that never committed (no receipt references
-      it): reused if identical, otherwise replaced. An object a committed receipt points to
-      is never replaced, because that receipt would have been found first.
-    - A failure after the photo was stored deletes it again; if that delete fails too, the
-      photo is an orphan that the next retry reuses or the daily cleanup removes.
+    - The id is being read by another request: this one waits up to OCR_WAIT_SECONDS for
+      that result (then the same comparison), or answers 503 + Retry-After. Only one
+      request per id ever calls OCR at a time, and only one receipt row can exist per id.
+    - The earlier request died (lease expired): this one takes over, reusing the stored
+      photo if it is identical (409 if it is a different photo).
+    - Only the request holding the claim writes the photo. If an object is already at the
+      path it is left over from an attempt that was undone: reused if identical, otherwise
+      replaced. A photo a finished receipt points to is never replaced.
     """
     clean = images.sanitize(data)  # 422 before anything is read or written
     path = f"{user.id}/{client_id}.{clean.ext}"
+    deadline = time.monotonic() + settings.ocr_wait_seconds
+    lost = 0
+    while True:
+        claim = _claim(factory, user, client_id, path)
+        if claim.kind == "foreign":
+            raise ApiError(409, "conflict", "This upload id is already in use. Scan again.")
+        if claim.kind == "done":
+            _require_same_photo(storage, claim.image_path, clean, data)
+            existing = _read_out(factory, user, client_id, storage)
+            if existing is not None:
+                return existing, False
+            continue  # discarded in between: the id is free again
+        if claim.kind == "busy":
+            if time.monotonic() >= deadline:
+                raise ApiError(
+                    503, "service-unavailable", UPLOAD_WAIT_DETAIL, headers={"Retry-After": "5"}
+                )
+            time.sleep(settings.ocr_poll_seconds)
+            continue
+        assert claim.attempt_id is not None
+        result = _read_with_claim(factory, user, client_id, claim, clean, data, ocr, storage)
+        if result is not None:
+            return result, True
+        # This attempt lost its lease to a retry (it ran past OCR_LEASE_SECONDS): wait for
+        # that attempt's result like any other duplicate. Bounded, so a request never keeps
+        # re-running OCR; the app's own retry picks up the finished receipt.
+        lost += 1
+        if lost >= MAX_LOST_CLAIMS:
+            raise ApiError(
+                503, "service-unavailable", UPLOAD_WAIT_DETAIL, headers={"Retry-After": "5"}
+            )
 
-    existing = _get_own(db, user, client_id)
-    if existing is not None:
-        _require_same_photo(storage, existing.image_path, clean, data)
-        return to_out(db, user, existing, storage), False
 
-    inserted = db.scalar(
-        pg_insert(Receipt)
-        .values(id=client_id, user_id=user.id, image_path=path, ocr_status="processing")
-        .on_conflict_do_nothing(index_elements=["id"])
-        .returning(Receipt.id)
-    )
-    if inserted is None:
-        # A concurrent retry with the same id committed first, or the id belongs to
-        # someone else (invisible under RLS).
-        existing = _get_own(db, user, client_id)
-        if existing is not None:
-            _require_same_photo(storage, existing.image_path, clean, data)
-            return to_out(db, user, existing, storage), False
-        raise ApiError(409, "conflict", "This upload id is already in use. Scan again.")
+def _read_with_claim(
+    factory: sessionmaker[Session],
+    user: CurrentUser,
+    client_id: UUID,
+    claim: _Claim,
+    clean: images.CleanImage,
+    original: bytes,
+    ocr: OcrEngine,
+    storage: ReceiptStorage,
+) -> ReceiptOut | None:
+    attempt = claim.attempt_id
+    assert attempt is not None
+    path = claim.image_path
 
-    cleanup.lock_image_path(db, path)  # until this request's transaction ends
+    # 2. photo (no transaction)
     try:
-        _store_photo(storage, path, clean)
+        if claim.kind == "takeover":
+            _adopt_photo(storage, path, clean, original)
+        else:
+            _store_photo(storage, path, clean)
     except StorageUnavailable as exc:
+        # Keep the photo if it got stored: the retry reuses it, or cleanup removes it.
+        _abandon(factory, user, client_id, attempt, storage, delete_photo=False)
         raise ApiError(
             503, "service-unavailable", "We couldn't save the photo. Please try again."
         ) from exc
-
-    try:
-        try:
-            result = ocr.read(clean.data)  # the sanitised photo: no original metadata
-        except OcrUnavailable as exc:
-            raise ApiError(
-                503,
-                "service-unavailable",
-                "Receipt reading is unavailable right now. Please try again.",
-                headers={"Retry-After": "5"},
-            ) from exc
-
-        text = result.text.strip()
-        parsed = _parse(text)
-        row = _require_own(db, user, client_id)
-        row.ocr_raw_text = (f"{SIMULATED_MARKER}\n{text}" if result.simulated else text) or None
-
-        ocr_confidence = result.confidence if result.confidence is not None else 0.0
-        unreadable = (
-            len(text) < MIN_TEXT_CHARS
-            or ocr_confidence < settings.ocr_min_confidence
-            or not parsed.has_money
-        )
-        if unreadable:
-            row.ocr_status = "failed"
-        else:
-            row.ocr_status = "draft"
-            row.confidence_store = _confidence(parsed.confidence_store * ocr_confidence)
-            row.confidence_items = _confidence(parsed.confidence_items * ocr_confidence)
-            row.confidence_total = _confidence(parsed.confidence_total * ocr_confidence)
-        db.flush()
-        db.refresh(row)
-        return to_out(db, user, row, storage), True
-    except BaseException:
-        # The receipt row is rolled back with the request; don't leave its image behind.
-        _delete_quietly(storage, path)
+    except ApiError:  # 409: an earlier upload stored a different photo for this id
+        _release(factory, user, client_id, attempt)
         raise
+    except BaseException:
+        _abandon(factory, user, client_id, attempt, storage, delete_photo=False)
+        raise
+
+    # 3. renew the lease and reserve today's quota (one short transaction)
+    external = is_external(ocr)
+    try:
+        with _user_tx(factory, user) as db:
+            renewed = db.scalar(
+                update(Receipt)
+                .where(Receipt.id == client_id, Receipt.user_id == user.id, _held(attempt))
+                .values(ocr_lease_expires_at=_lease_end())
+                .returning(Receipt.id)
+                .execution_options(synchronize_session=False)
+            )
+            reservation = quota.reserve(db, external=external) if renewed else None
+    except BaseException:
+        _abandon(factory, user, client_id, attempt, storage, delete_photo=True)
+        raise
+    if reservation is None:
+        return _lost_claim(factory, user, client_id, path, storage)
+
+    # 4. OCR: no transaction and no pooled connection held while it runs
+    started = time.monotonic()
+    try:
+        result = ocr.read(clean.data)  # the sanitised photo: no original metadata
+    except OcrUnavailable as exc:
+        _log_ocr(ocr, "unavailable", started)
+        _abandon(
+            factory, user, client_id, attempt, storage, delete_photo=True, reservation=reservation
+        )
+        raise ApiError(
+            503,
+            "service-unavailable",
+            "Receipt reading is unavailable right now. Please try again.",
+            headers={"Retry-After": "5"},
+        ) from exc
+    except BaseException:
+        _log_ocr(ocr, "error", started)
+        _abandon(
+            factory, user, client_id, attempt, storage, delete_photo=True, reservation=reservation
+        )
+        raise
+
+    # 5. finish: only while this attempt still owns the receipt
+    text = redaction.redact(result.text).strip()
+    parsed = _parse(text)
+    ocr_confidence = result.confidence if result.confidence is not None else 0.0
+    unreadable = (
+        len(text) < MIN_TEXT_CHARS
+        or ocr_confidence < settings.ocr_min_confidence
+        or not parsed.has_money
+    )
+    values: dict[str, object] = {
+        "ocr_raw_text": (f"{SIMULATED_MARKER}\n{text}" if result.simulated else text) or None,
+        "ocr_status": "failed" if unreadable else "draft",
+        "ocr_attempt_id": None,
+        "ocr_lease_expires_at": None,
+    }
+    if not unreadable:
+        values |= {
+            "confidence_store": _confidence(parsed.confidence_store * ocr_confidence),
+            "confidence_items": _confidence(parsed.confidence_items * ocr_confidence),
+            "confidence_total": _confidence(parsed.confidence_total * ocr_confidence),
+        }
+    _log_ocr(ocr, str(values["ocr_status"]), started, chars=len(text))
+    with _user_tx(factory, user) as db:
+        quota.record_outcome(db, reservation, "succeeded")
+        # Not `_held`: the lease may have run out while OCR worked; what matters is that no
+        # other attempt has taken over (that would have changed ocr_attempt_id).
+        finished = db.scalar(
+            update(Receipt)
+            .where(
+                Receipt.id == client_id,
+                Receipt.user_id == user.id,
+                Receipt.ocr_status == "processing",
+                Receipt.ocr_attempt_id == attempt,
+            )
+            .values(**values)
+            .returning(Receipt.id)
+            .execution_options(synchronize_session=False)
+        )
+        if finished is not None:
+            return to_out(db, user, _require_own(db, user, client_id), storage)
+    return _lost_claim(factory, user, client_id, path, storage)
+
+
+def _lost_claim(
+    factory: sessionmaker[Session],
+    user: CurrentUser,
+    client_id: UUID,
+    path: str,
+    storage: ReceiptStorage,
+) -> None:
+    """The attempt no longer owns its receipt. Discarded meanwhile → it stays deleted (and
+    its photo is removed again, in case this attempt stored it after the discard). Taken
+    over by a retry → None: the caller waits for that attempt's result."""
+    with _user_tx(factory, user) as db:
+        exists = _get_own(db, user, client_id) is not None
+    if exists:
+        return None
+    _delete_quietly(storage, path)
+    raise ApiError(409, "conflict", "This scan was cancelled before it finished reading.")
+
+
+def _log_ocr(engine: OcrEngine, outcome: str, started: float, *, chars: int = 0) -> None:
+    """Engine, outcome, duration and text length only: never the text, image or ids."""
+    logger.info(
+        "Receipt OCR %s: engine=%s duration_ms=%d chars=%d",
+        outcome,
+        engine.name,
+        int((time.monotonic() - started) * 1000),
+        chars,
+    )
 
 
 def _sha256(data: bytes) -> str:
@@ -353,6 +638,27 @@ def _store_photo(storage: ReceiptStorage, path: str, clean: images.CleanImage) -
         storage.put(path, clean.data, clean.content_type)
     except ObjectExists as exc:  # someone else wrote it in between: never overwrite
         raise StorageUnavailable("photo appeared again while replacing it") from exc
+
+
+def _adopt_photo(
+    storage: ReceiptStorage, path: str, clean: images.CleanImage, original: bytes
+) -> None:
+    """Takeover of an unfinished receipt: reuse the photo its earlier upload stored if it is
+    this photo (409 if it is a different one); store this one if none was stored."""
+    try:
+        stored = storage.get(path)
+    except StorageUnavailable:
+        raise
+    if stored is None:
+        _store_photo(storage, path, clean)
+        return
+    if _sha256(stored) in (clean.sha256, _sha256(original)):
+        return
+    raise ApiError(
+        409,
+        "conflict",
+        "This upload id was already used for a different photo. Scan again.",
+    )
 
 
 def _delete_quietly(storage: ReceiptStorage, path: str) -> None:
@@ -456,6 +762,8 @@ def confirm_receipt(
                 409, "conflict", "This receipt was saved before and its transaction was deleted."
             )
         return ReceiptConfirmed(**saved.model_dump(), already_confirmed=True)
+    if row.ocr_status == "processing":
+        raise ApiError(409, "conflict", UPLOAD_WAIT_DETAIL)
     if row.ocr_status != "draft":
         raise ApiError(
             409,

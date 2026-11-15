@@ -12,7 +12,7 @@ from app.modules.expenses.models import (
 from app.modules.insights.models import Insight
 from app.modules.meals.models import IngredientInventory, Recipe, RecipeIngredient
 from app.modules.notifications.models import DeviceToken, Notification
-from app.modules.receipts.models import Receipt
+from app.modules.receipts.models import OcrUsageDaily, Receipt
 from app.modules.replenishment.models import (
     ReplenishmentSuggestion,
     ShoppingList,
@@ -31,6 +31,7 @@ __all__ = [
     "IngredientInventory",
     "Insight",
     "Notification",
+    "OcrUsageDaily",
     "Product",
     "Profile",
     "PurchasePattern",

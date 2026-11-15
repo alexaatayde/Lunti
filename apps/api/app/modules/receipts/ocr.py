@@ -8,7 +8,11 @@
   reads as blank, which exercises the "couldn't read" path. Results are marked simulated.
 
 There is no fallback between them: a misconfigured provider is an error (503), never a
-silent switch to fixture text.
+silent switch to fixture text. Without OCR_PROVIDER a development API has OCR disabled
+(503), so the paid service is only ever called when configured explicitly.
+
+The engines do no database work. The upload service calls `read` only after it has committed
+its state and released its database connection (service.upload_receipt).
 """
 
 import hashlib
@@ -21,13 +25,14 @@ from typing import Protocol
 
 from app.core.config import settings
 from app.core.errors import ApiError
-from app.modules.receipts import images
+from app.modules.receipts import images, ocr_config
 
 logger = logging.getLogger(__name__)
 
 GOOGLE_VISION = "google_vision"
 FIXTURE = "fixture"
-VISION_TIMEOUT_SECONDS = 25
+# Engines whose requests are billed: they use the app-wide daily allowance (quota.py).
+EXTERNAL_ENGINES = frozenset({GOOGLE_VISION})
 
 
 class OcrUnavailable(Exception):
@@ -116,15 +121,27 @@ def _joins(prev: Word, word: Word) -> bool:
 
 
 class GoogleVisionOcr:
+    """One DOCUMENT_TEXT_DETECTION request per `read`: a fixed timeout and no automatic
+    retries, so each call is at most one billed request and finishes within the upload's
+    lease. Errors never carry receipt text or credentials into logs."""
+
     name = GOOGLE_VISION
 
-    def __init__(self, credentials_file: str) -> None:
+    def __init__(
+        self, credentials_file: str | None = None, *, timeout: float | None = None
+    ) -> None:
         from google.cloud import vision
-        from google.oauth2 import service_account
 
-        credentials = service_account.Credentials.from_service_account_file(credentials_file)
+        if credentials_file:
+            from google.oauth2 import service_account
+
+            credentials = service_account.Credentials.from_service_account_file(credentials_file)
+            client = vision.ImageAnnotatorClient(credentials=credentials)
+        else:  # keyless: the runtime's application default credentials
+            client = vision.ImageAnnotatorClient()
         self._vision = vision
-        self._client = vision.ImageAnnotatorClient(credentials=credentials)
+        self._client = client
+        self.timeout = timeout if timeout is not None else settings.ocr_timeout_seconds
 
     def read(self, image: bytes) -> OcrResult:
         from google.api_core import exceptions as google_errors
@@ -133,17 +150,18 @@ class GoogleVisionOcr:
             response = self._client.document_text_detection(
                 image=self._vision.Image(content=image),
                 image_context={"language_hints": ["en", "fil"]},
-                timeout=VISION_TIMEOUT_SECONDS,
+                timeout=self.timeout,
+                retry=None,  # never resend: each attempt may be billed (quota.py)
             )
         except google_errors.GoogleAPICallError as exc:
             logger.warning("Vision request failed: %s", exc.__class__.__name__)
-            raise OcrUnavailable from exc
+            raise OcrUnavailable(exc.__class__.__name__) from None
         except Exception as exc:  # transport errors (DNS, TLS, timeouts)
             logger.warning("Vision request failed: %s", exc.__class__.__name__)
-            raise OcrUnavailable from exc
+            raise OcrUnavailable(exc.__class__.__name__) from None
         if response.error.message:
             logger.warning("Vision returned an error (code %s)", response.error.code)
-            raise OcrUnavailable(response.error.message)
+            raise OcrUnavailable(f"vision error code {response.error.code}")
         return self._to_result(response.full_text_annotation)
 
     def _to_result(self, annotation) -> OcrResult:  # noqa: ANN001 (protobuf message)
@@ -207,18 +225,27 @@ def _not_configured(detail: str) -> ApiError:
     return ApiError(503, "service-unavailable", "Receipt scanning isn't available right now.")
 
 
+def is_external(engine: OcrEngine) -> bool:
+    return engine.name in EXTERNAL_ENGINES
+
+
 @lru_cache
 def get_ocr() -> OcrEngine:
     """FastAPI dependency (tests override it). Never falls back to another provider."""
-    provider = settings.ocr_provider.strip().lower()
+    provider = settings.resolved_ocr_provider
+    if provider == "disabled":
+        logger.info("Receipt OCR is disabled (set OCR_PROVIDER to enable it)")
+        raise ApiError(503, "service-unavailable", "Receipt scanning isn't available right now.")
     if provider == "google":
-        if not settings.google_application_credentials:
-            raise _not_configured("GOOGLE_APPLICATION_CREDENTIALS is not set")
-        if not Path(settings.google_application_credentials).is_file():
-            raise _not_configured("GOOGLE_APPLICATION_CREDENTIALS file not found")
+        problems = ocr_config.errors(ocr_config.check_settings(settings))
+        if problems:
+            # Names the failed checks only; never paths' contents or key material.
+            raise _not_configured("; ".join(f"{p.check}: {p.detail}" for p in problems))
+        if settings.google_vision_auth.strip().lower() == "application_default":
+            return GoogleVisionOcr()
         return GoogleVisionOcr(settings.google_application_credentials)
     if provider == "fixture":
-        if settings.app_env.strip().lower() == "production":
+        if settings.is_production:
             raise _not_configured("fixture OCR is refused when APP_ENV=production")
         logger.warning("Receipt OCR uses development fixtures (simulated results)")
         return FixtureOcr(Path(settings.ocr_fixture_dir))

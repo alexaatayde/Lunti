@@ -127,6 +127,14 @@ def _limits_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "rate_limit_enabled", False)
 
 
+@pytest.fixture(autouse=True)
+def _ocr_limits_generous_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The daily OCR counters live in the shared test database, so tests would use up one
+    day's allowance together. Quota tests set real limits (and their own day) explicitly."""
+    monkeypatch.setattr(settings, "ocr_user_daily_limit", 1_000_000)
+    monkeypatch.setattr(settings, "ocr_global_daily_limit", 1_000_000)
+
+
 @pytest.fixture
 def client(verifier: TokenVerifier, rate_limiter: RateLimiter) -> Iterator[TestClient]:
     app.dependency_overrides[get_token_verifier] = lambda: verifier

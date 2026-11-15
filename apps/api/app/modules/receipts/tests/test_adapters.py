@@ -74,7 +74,14 @@ def _vision(words: list[NS], error: str = "") -> GoogleVisionOcr:
     annotation = NS(text="", pages=[NS(blocks=[NS(paragraphs=[NS(words=words)])])])
     response = NS(error=NS(message=error, code=3 if error else 0), full_text_annotation=annotation)
     engine._vision = NS(Image=lambda content: content)
-    engine._client = NS(document_text_detection=lambda **_: response)
+    engine.calls = []  # type: ignore[attr-defined]
+
+    def detect(**kwargs):  # noqa: ANN003, ANN202
+        engine.calls.append(kwargs)  # type: ignore[attr-defined]
+        return response
+
+    engine._client = NS(document_text_detection=detect)
+    engine.timeout = 25.0
     return engine
 
 
@@ -85,6 +92,21 @@ def test_vision_result_has_rows_and_mean_confidence() -> None:
     assert result.text == "MILK   90.50"
     assert result.confidence == pytest.approx(0.8)
     assert result.engine == "google_vision" and not result.simulated
+
+
+def test_vision_sends_one_request_with_a_timeout_and_no_retries() -> None:
+    engine = _vision([_vision_word("MILK", 0, 0, 0.9)])
+    engine.read(b"img")
+    (call,) = engine.calls  # type: ignore[attr-defined]
+    assert call["retry"] is None  # each retry could be billed: never resend automatically
+    assert call["timeout"] == 25.0
+
+
+def test_vision_errors_never_carry_the_service_message() -> None:
+    with pytest.raises(OcrUnavailable) as error:
+        _vision([], error="quota exceeded for project lunti-123 key AIza...").read(b"img")
+    assert "AIza" not in str(error.value) and "lunti-123" not in str(error.value)
+    assert error.value.__cause__ is None
 
 
 def test_vision_error_is_unavailable() -> None:

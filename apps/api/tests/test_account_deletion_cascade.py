@@ -26,6 +26,7 @@ USER_TABLES = {
     "ingredient_inventory",
     "insights",
     "notifications",
+    "ocr_usage_daily",
     "products",
     "profiles",
     "purchase_patterns",
@@ -112,6 +113,10 @@ def _populate(admin_engine: Engine, user_id: uuid.UUID) -> None:
             "insert into insights (user_id, type, message) values (:u, 'summary', 'x') returning id"
         )
         one("insert into notifications (user_id, type) values (:u, 'budget') returning id")
+        one(
+            "insert into ocr_usage_daily (usage_date, counter, user_id, used)"
+            " values (:today, 'user_scans', :u, 1) returning id"
+        )
         one(
             "insert into device_tokens (user_id, fcm_token, platform)"
             " values (:u, :tok, 'android') returning id",

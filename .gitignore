@@ -8,6 +8,20 @@
 .env.*
 !.env.example
 
+# Cloud credential files (Phase 8D.4a). Keys belong OUTSIDE the repository (see
+# apps/api/README.md → Receipt scanning); these names are only a safety net. Targeted on
+# purpose: ordinary .json files (package.json, openapi.json, fixtures) stay tracked.
+*service-account*.json
+*service_account*.json
+*serviceaccount*.json
+*-adminsdk-*.json
+gcp-*key*.json
+*vision-key*.json
+google-credentials*.json
+client_secret*.json
+apps/api/secrets/
+apps/api/credentials/
+
 # Python (apps/api)
 .venv/
 __pycache__/

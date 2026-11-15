@@ -3656,7 +3656,7 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
-            /** @description Too many requests; wait `Retry-After` seconds. */
+            /** @description Too many requests, or today's scan limit is reached (type ocr-daily-limit); wait `Retry-After` seconds. */
             429: {
                 headers: {
                     /** @description Seconds to wait. */

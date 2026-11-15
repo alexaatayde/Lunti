@@ -130,10 +130,17 @@ a transaction until the user taps "Save receipt" on the review screen.
 
 One-time setup for real scanning:
 
-1. **Google Cloud Vision.** In a Google Cloud project, enable the *Cloud Vision API* (billing
-   must be on). Create a service account (no project role is needed to call Vision), add a
-   JSON key, save it outside the repo, e.g. `~/.config/lunti/vision-key.json`, and set
-   `GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/vision-key.json` in `apps/api/.env`.
+1. **Google Cloud Vision** (not enabled yet; needs separate approval). In a Google Cloud
+   project, enable the *Cloud Vision API* (billing must be on). Create a service account (no
+   project role is needed to call Vision), add a JSON key, save it **outside the repo**, e.g.
+   `~/.config/lunti/vision-key.json`, `chmod 600` it, and set
+   `GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/vision-key.json` and
+   `OCR_PROVIDER=google` in `apps/api/.env`. The API refuses the key (503) if it is inside
+   the repository, readable by other users, or not a service-account key. On deployed
+   infrastructure prefer keyless authentication: `GOOGLE_VISION_AUTH=application_default`
+   uses the runtime's attached service account and needs no key file. Check either setup
+   without contacting Google: `.venv/bin/python -m scripts.check_ocr_config --provider google`
+   (it never prints key material).
 2. **Supabase Storage.** Dashboard → Storage → *New bucket*, twice: `receipts` (real use)
    and `receipts-dev` (testing only; may be emptied at any time). For both: **Public off**,
    file size limit 10 MB (10485760 bytes), allowed types `image/jpeg, image/png, image/webp`.
@@ -162,13 +169,55 @@ other object name (no `..`, no other prefixes) before making a request.
 
 - Same id, same photo (identical after re-encoding) → the existing receipt, `200`, nothing
   written. Same id, **different** photo → `409`; the accepted photo is never replaced.
-- Two requests with one id at once: the database serialises them on the receipt's primary
-  key; only the one that created the row writes the photo, the other gets `200`/`409`.
+- Two requests with one id at once: only the one that created the receipt row stores the
+  photo and calls OCR; the other waits up to `OCR_WAIT_SECONDS` (20 s) for its result
+  (`200`/`409`), or gets `503` + `Retry-After: 5` and the app retries.
 - A photo left behind by an attempt that never finished (photo stored, then OCR or the
   database failed, and deleting it failed too) is reused by the retry if identical, or
   removed and replaced if not; no receipt ever pointed at it. Otherwise the daily cleanup
   deletes it after 24 h. Uploads hold a per-photo advisory lock that the cleanup also takes,
   so it never deletes a photo an upload is about to save.
+
+**OCR processing, limits and privacy (Phase 8D.4a, migration 0006).**
+
+- *No transaction during OCR.* The upload commits the receipt as `processing` with a lease
+  (`ocr_attempt_id`, `ocr_lease_expires_at`; `OCR_LEASE_SECONDS`, default 60), stores the
+  photo, takes one scan from the daily quota, and only then calls OCR, holding no database
+  connection. The result is written only if that attempt still holds the receipt, so a
+  receipt discarded meanwhile stays deleted (the late result gets `409`, its photo is
+  removed) and an attempt that was taken over never overwrites the newer one. After a crash
+  the next retry takes over once the lease has expired; abandoned `processing` receipts are
+  deleted by the cleanup after `RECEIPT_PROCESSING_ABANDON_MINUTES` (60). Vision gets one
+  request with a `OCR_TIMEOUT_SECONDS` (25 s) timeout and no automatic retries.
+- *Daily limits* (Asia/Manila days, table `ocr_usage_daily`, survive restarts and hold across
+  processes): `OCR_USER_DAILY_LIMIT` = 50 scans per user (any engine; `429`,
+  type `ocr-daily-limit`), `OCR_GLOBAL_DAILY_LIMIT` = 50 Google Vision requests per day for
+  everyone (`503`; `0` stops all Vision calls). Both carry `Retry-After` until Manila midnight.
+  A reservation is taken atomically (`lunti_private.reserve_ocr_quota`) right before each OCR
+  call and never handed back: failures, timeouts and retries all count, and a process that
+  crashes after reserving leaves it counted (reported as `unknown`), since the request may
+  have been billed. Fixture OCR never uses the app-wide allowance. The app role has no access
+  to the counter table. Read-only report (aggregates, no user ids):
+  `.venv/bin/python -m scripts.ocr_usage [--days 7]`. A Google Cloud budget alert only
+  notifies; these limits are the hard stop.
+- *Recognised text.* Before it is parsed or stored, card numbers are cut to the last four
+  digits and payment codes (approval, RRN, trace, terminal, reference), buyer name / address /
+  TIN, senior citizen / PWD ids and names, member numbers, e-mail addresses and mobile numbers
+  are masked (`app/modules/receipts/redaction.py`); store details, items and amounts are kept
+  so the draft is unchanged. `receipts.ocr_raw_text` is never returned by the API or logged
+  (OCR logs carry only engine, outcome, duration and character count). The structured record
+  is the transaction and its items; the raw text only rebuilds the review draft.
+- *Retention decision (approved 2026-11-15): 30 days after confirmation.* The cleanup then
+  sets `ocr_raw_text` to NULL and stamps `ocr_text_purged_at`; the receipt row, photo,
+  transaction and items stay, and a purged receipt still reads back (without a draft).
+  **Not enabled yet:** `RECEIPT_RAW_TEXT_RETENTION_DAYS` defaults to `0` (keep) and is set to
+  `30` only after migration 0006 is live and the first run has been reviewed with
+  `python -m scripts.cleanup_receipts --dry-run` (`raw_text_purgeable`). Unconfirmed receipts
+  keep their 7-day deletion (`RECEIPT_DRAFT_RETENTION_DAYS`); per-user OCR counters are
+  deleted after `OCR_USAGE_USER_RETENTION_DAYS` (31) and with the account.
+- *Migration 0006* is additive (three nullable `receipts` columns, `ocr_usage_daily`, two
+  `lunti_private` functions). The previous API release runs unchanged on it, so the order is:
+  apply 0006, then start the new API; this API version does not run without it.
 
 **Development without credentials.** Start the API with simulated adapters:
 
@@ -176,6 +225,8 @@ other object name (no `..`, no other prefixes) before making a request.
 OCR_PROVIDER=fixture RECEIPT_STORAGE=local uvicorn app.main:app --reload --host 0.0.0.0
 ```
 
+- Without `OCR_PROVIDER` a development API has OCR **disabled** (503): Google Vision is only
+  ever called when `OCR_PROVIDER=google` is set explicitly (production defaults to `google`).
 - `fixture` OCR only recognises the synthetic images in `tests/fixtures/receipts/*.png`
   (byte for byte, as uploaded or after re-encoding) and returns their `.txt` text; any other
   photo reads as unreadable. The
