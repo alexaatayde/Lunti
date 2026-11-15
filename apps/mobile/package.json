@@ -58,7 +58,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "jest",
-    "api:generate": "npx --yes openapi-typescript@7.13.0 src/api/openapi.json -o src/api/schema.d.ts"
+    "api:generate": "npx --yes openapi-typescript@7.13.0 src/api/openapi.json -o src/api/schema.d.ts",
+    "emulator:preflight": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/isolated-emulator-preflight.mjs"
   },
   "private": true,
   "jest": {

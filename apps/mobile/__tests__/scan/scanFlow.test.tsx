@@ -1,5 +1,5 @@
-import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
-import { BackHandler } from 'react-native';
+import { act, fireEvent, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
+import { AccessibilityInfo, BackHandler } from 'react-native';
 
 import { queryClient } from '../../src/api/queryClient';
 import { useScanStore } from '../../src/stores/scan';
@@ -356,6 +356,81 @@ describe('Receipt review', () => {
 
     expect(await screen.findByText("Date can't be in the future.")).toBeOnTheScreen();
     expect(useScanStore.getState().receipt).not.toBeNull();
+  });
+
+  it('shows a failed save next to the Save button, keeps the edits and retries the same receipt', async () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility');
+    let attempts = 0;
+    api.set(`POST ${RECEIPTS}/${RID}/confirm`, () => {
+      attempts += 1;
+      if (attempts === 1) throw new TypeError('Network request failed');
+      return reply(200, {
+        ...txn({ amount: '252.00', source: 'receipt', receipt_id: RID, item_count: 2 }),
+        budget_alerts: [],
+        already_confirmed: false,
+      });
+    });
+    const router = await openReview();
+    await fireEvent.press(screen.getByRole('button', { name: 'Increase quantity of EGGS LARGE' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Use ₱252.00 as the total' }));
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Save receipt' }));
+
+    const message = "Can't reach Lunti. Check your connection and try again.";
+    const banner = await screen.findByTestId('review-save-error');
+    // In the footer with the Save button (visible without scrolling), not in the scroll view.
+    const footer = screen.getByTestId('review-footer');
+    expect(within(footer).getByTestId('review-save-error')).toBe(banner);
+    expect(within(footer).getByRole('button', { name: 'Save receipt' })).toBeOnTheScreen();
+    expect(banner).toHaveTextContent(message);
+    expect(banner.props.accessibilityRole).toBe('alert');
+    expect(banner.props.accessibilityLiveRegion).toBe('polite');
+    expect(screen.getAllByText(message)).toHaveLength(1); // shown once, not also in the form
+    // Readable at large font sizes: wraps instead of being cut off, scales up to 200%.
+    const text = within(banner).getByText(message);
+    expect(text).not.toHaveProp('numberOfLines');
+    expect(text.props.maxFontSizeMultiplier ?? 2).toBeGreaterThanOrEqual(2);
+    expect(announce).toHaveBeenCalledWith(message);
+    // Nothing was lost: still on the review with the user's edits.
+    expect(router.getPathname()).toBe('/scan/review');
+    expect(screen.getByLabelText('Receipt total in pesos')).toHaveProp('value', '252.00');
+    expect(screen.getByLabelText('Quantity 2')).toBeOnTheScreen();
+    expect(useScanStore.getState().receipt?.id).toBe(RID);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Save receipt' }));
+
+    await waitFor(() => expect(router.getPathname()).toBe('/transactions'));
+    const sent = api.calls('POST', `${RECEIPTS}/${RID}/confirm`);
+    expect(sent).toHaveLength(2); // the retry confirms the same receipt (idempotent server-side)
+    expect(sent[1].body).toEqual(sent[0].body);
+    expect(screen.queryByTestId('review-save-error')).toBeNull();
+    expect(useToastStore.getState().message).toBe('Transaction saved. Budget updated.');
+    announce.mockRestore();
+  });
+
+  it('shows a server outage next to the Save button and clears it on the next attempt', async () => {
+    let attempts = 0;
+    api.set(`POST ${RECEIPTS}/${RID}/confirm`, () => {
+      attempts += 1;
+      return attempts === 1
+        ? problem(503, 'Lunti is temporarily unavailable. Please try again shortly.')
+        : problem(422, 'The request has invalid fields.', [
+            { field: 'occurred_at', message: "Date can't be in the future.", code: 'value_error' },
+          ]);
+    });
+    await openReview();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Save receipt' }));
+    expect(await screen.findByTestId('review-save-error')).toHaveTextContent(
+      /temporarily unavailable/,
+    );
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Save receipt' }));
+    expect(await screen.findByText("Date can't be in the future.")).toBeOnTheScreen();
+    expect(screen.getByTestId('review-save-error')).toHaveTextContent(
+      'Some details need fixing. Check the highlighted fields.',
+    );
+    expect(screen.queryByText(/temporarily unavailable/)).toBeNull();
   });
 
   it('warns about a likely duplicate', async () => {

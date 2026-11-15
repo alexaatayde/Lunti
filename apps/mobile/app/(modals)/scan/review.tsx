@@ -12,7 +12,14 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Controller, useFieldArray, useForm, useWatch, type FieldPath } from 'react-hook-form';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApiError } from '../../../src/api/client';
@@ -168,6 +175,10 @@ function ReviewForm({
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   useHardwareBack(() => setConfirmDiscard(true));
   const [formError, setFormError] = useState<string | null>(null);
+  // TalkBack doesn't reliably read a live region that has only just appeared.
+  useEffect(() => {
+    if (formError) AccessibilityInfo.announceForAccessibility(formError);
+  }, [formError]);
   // The date hint goes away once the user picks a date (Reset changes brings it back).
   const [dateEdited, setDateEdited] = useState(false);
 
@@ -603,18 +614,28 @@ function ReviewForm({
             ) : null}
           </View>
         ) : null}
+      </ScrollView>
 
+      <View
+        style={[styles.footer, { paddingBottom: spacing.lg + insets.bottom }]}
+        testID="review-footer"
+      >
         {formError ? (
-          <View style={styles.formError} accessibilityLiveRegion="polite">
+          // Next to the button, not at the end of the scroll view: a failed save (offline,
+          // server down) must be visible without scrolling. The form keeps its values.
+          <View
+            style={styles.formError}
+            accessible
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+            testID="review-save-error"
+          >
             <AlertCircleIcon size={16} color={colors.dangerText} />
             <AppText variant="body" color={colors.dangerText} style={styles.flex}>
               {formError}
             </AppText>
           </View>
         ) : null}
-      </ScrollView>
-
-      <View style={[styles.footer, { paddingBottom: spacing.lg + insets.bottom }]}>
         <Button
           label="Save receipt"
           onPress={onSubmit}
@@ -945,8 +966,10 @@ const styles = StyleSheet.create({
   matchLine: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
   formError: {
     flexDirection: 'row',
-    alignItems: 'center',
+    // Icon stays on the first line when the message wraps (large text).
+    alignItems: 'flex-start',
     gap: spacing.sm,
+    marginBottom: spacing.sm,
     padding: spacing.md,
     borderRadius: radius.input,
     backgroundColor: colors.dangerBg,

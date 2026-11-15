@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, text
 
 from app.core.auth import CurrentUser
+from app.core.config import settings
 from app.core.db import make_session_factory, scope_session_to_user
 from app.jobs.receipt_cleanup import CLEANUP_LOCK, run_receipt_cleanup
 from app.main import app
@@ -311,6 +312,119 @@ def test_orphan_grace_period_boundaries_and_namespace(
     assert old not in storage.objects and young in storage.objects
     assert result["orphans_deleted"] == 1 and result["ignored_names"] == 4
     assert all(f in storage.objects for f in ("README.txt", f"{u}/notes.jpg"))
+
+
+def _orphans_aged(storage: TimedStorage, *ages: timedelta) -> list[str]:
+    paths = []
+    for age in ages:
+        path = f"{uuid.uuid4()}/{uuid.uuid4()}.jpg"
+        storage.add(path, age)
+        paths.append(path)
+    return paths
+
+
+def test_cleanup_defaults_to_the_configured_24_hour_grace(
+    db_client: TestClient,
+    storage: TimedStorage,
+    factory,  # noqa: ANN001
+) -> None:
+    assert timedelta(hours=settings.receipt_orphan_grace_hours) == GRACE
+    young, old = _orphans_aged(storage, GRACE - timedelta(minutes=5), GRACE + timedelta(minutes=5))
+
+    result = run_receipt_cleanup(factory, lambda: storage)  # no grace given
+
+    assert young in storage.objects and old not in storage.objects
+    assert result["orphans_deleted"] == 1 and result["images_kept"] == 1
+
+
+def test_cleanup_respects_an_explicit_zero_grace(
+    db_client: TestClient,
+    storage: TimedStorage,
+    factory,  # noqa: ANN001
+) -> None:
+    # Was `orphan_grace or default`: timedelta(0) is falsy and silently became 24 h.
+    (fresh,) = _orphans_aged(storage, timedelta(seconds=30))
+
+    result = run_receipt_cleanup(factory, lambda: storage, orphan_grace=timedelta(0))
+
+    assert fresh not in storage.objects and result["orphans_deleted"] == 1
+
+
+def test_cleanup_respects_a_positive_custom_grace(
+    db_client: TestClient,
+    storage: TimedStorage,
+    factory,  # noqa: ANN001
+) -> None:
+    grace = timedelta(hours=2)
+    young, old = _orphans_aged(storage, timedelta(hours=1), timedelta(hours=3))
+
+    result = run_receipt_cleanup(factory, lambda: storage, orphan_grace=grace)
+
+    assert young in storage.objects and old not in storage.objects
+    assert result["orphans_deleted"] == 1 and result["images_kept"] == 1
+
+
+def test_zero_grace_never_deletes_photos_of_existing_receipts(
+    db_client: TestClient,
+    storage: TimedStorage,
+    user,
+    factory,  # noqa: ANN001
+) -> None:
+    _, headers, cats = user
+    saved, _ = scan_and_save(db_client, headers, cats)
+    draft = upload(db_client, headers).json()["id"]
+    referenced = {p for p in storage.objects if p.split("/")[1].split(".")[0] in (saved, draft)}
+    assert len(referenced) == 2
+    for path in referenced:
+        storage.age(path, timedelta(days=30))
+    (orphan,) = _orphans_aged(storage, timedelta(days=30))
+
+    result = run_receipt_cleanup(
+        factory, lambda: storage, orphan_grace=timedelta(0), draft_retention=RETENTION
+    )
+
+    assert referenced <= set(storage.objects) and orphan not in storage.objects
+    assert result["orphans_deleted"] == 1 and result["images_kept"] == 2
+
+
+def test_cleanup_respects_an_explicit_zero_draft_retention(
+    db_client: TestClient,
+    storage: TimedStorage,
+    user,
+    admin_engine: Engine,
+    factory,  # noqa: ANN001
+) -> None:
+    user_id, headers, cats = user
+    draft = upload(db_client, headers).json()["id"]
+    saved, _ = scan_and_save(db_client, headers, cats)
+    backdate(admin_engine, draft, timedelta(seconds=5))
+
+    run_receipt_cleanup(factory, lambda: storage)  # default 7 days: a fresh draft stays
+    assert sorted(receipt_rows(admin_engine, user_id)) == sorted(
+        [(draft, "draft"), (saved, "confirmed")]
+    )
+
+    # The test database is shared: zero retention may also clear other tests' drafts.
+    result = run_receipt_cleanup(factory, lambda: storage, draft_retention=timedelta(0))
+
+    assert result["stale_drafts_deleted"] >= 1
+    assert receipt_rows(admin_engine, user_id) == [(saved, "confirmed")]
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"orphan_grace": timedelta(seconds=-1)}, {"draft_retention": timedelta(seconds=-1)}],
+)
+def test_cleanup_refuses_negative_windows(
+    db_client: TestClient,
+    storage: TimedStorage,
+    factory,  # noqa: ANN001
+    kwargs,  # noqa: ANN001
+) -> None:
+    (path,) = _orphans_aged(storage, timedelta(days=3))
+    with pytest.raises(ValueError, match="must not be negative"):
+        run_receipt_cleanup(factory, lambda: storage, **kwargs)
+    assert path in storage.objects
 
 
 def test_a_listing_outage_postpones_the_orphan_pass_without_changes(

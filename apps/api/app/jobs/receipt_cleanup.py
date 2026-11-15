@@ -30,8 +30,21 @@ def run_receipt_cleanup(
     orphan_grace: timedelta | None = None,
     draft_retention: timedelta | None = None,
 ) -> dict[str, int]:
-    grace = orphan_grace or timedelta(hours=settings.receipt_orphan_grace_hours)
-    retention = draft_retention or timedelta(days=settings.receipt_draft_retention_days)
+    # `is None`, not `or`: timedelta(0) is falsy, and an explicit zero must not silently
+    # become the 24 h / 7 day default.
+    grace = (
+        timedelta(hours=settings.receipt_orphan_grace_hours)
+        if orphan_grace is None
+        else orphan_grace
+    )
+    retention = (
+        timedelta(days=settings.receipt_draft_retention_days)
+        if draft_retention is None
+        else draft_retention
+    )
+    if grace < timedelta(0) or retention < timedelta(0):
+        # A negative window would put the cutoff in the future and reach brand-new uploads.
+        raise ValueError("orphan_grace and draft_retention must not be negative")
     counts: dict[str, int] = {"skipped": 0}
     with factory() as lock_db:
         locked = lock_db.scalar(select(func.pg_try_advisory_lock(func.hashtext(CLEANUP_LOCK))))

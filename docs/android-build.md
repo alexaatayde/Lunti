@@ -122,3 +122,45 @@ is in the release manifest.
 - **Firebase (later subphase):** `google-services.json` (git-ignored) +
   `android.googleServicesFile`, FCM V1 credentials in EAS, backend `FCM_CREDENTIALS`. Until
   then push registration fails quietly and in-app notifications still work.
+
+## Isolated emulator testing (Phase 8D.3)
+
+For end-to-end tests that write data, the emulator must reach only an isolated stack: a test
+API on a throwaway `lunti_test_*` database (`LUNTI_ISOLATED_TEST=1`, see the root README) and a
+local auth stub, never live Supabase Auth or the developer API on port 8000. Use synthetic
+accounts and images only.
+
+**Why the preflight exists.** An emulator quickboot snapshot can restore Lunti Dev *already
+running* with an old bundle (normal `.env`: real Supabase). Opening the dev-client link only
+brings that app to the front; it does not reload it. In 8D.3 this sent one synthetic sign-in
+attempt to live Supabase Auth (refused; no account changed). Never assume the running bundle.
+
+1. Start the test API and the auth stub on loopback ports (e.g. 8010 and 54321).
+2. Start a separate Metro with the test values (the normal `.env` is not edited; process
+   variables win over `.env`):
+
+   ```bash
+   cd apps/mobile
+   EXPO_PUBLIC_API_URL=http://127.0.0.1:8010/api/v1 \
+   EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 \
+   CI=1 npx expo start --dev-client --port 8082
+   ```
+
+3. Run the fail-closed preflight **before signing in or opening any financial screen**:
+
+   ```bash
+   npm run emulator:preflight -- --metro 8082 \
+     --api http://127.0.0.1:8010/api/v1 --auth http://127.0.0.1:54321
+   ```
+
+   It refuses non-loopback targets and port 8000, checks that the bundle Metro serves inlines
+   exactly the test URLs and no real Supabase host, force-stops the app, leaves only the test
+   ports in `adb reverse` (8081 removed, so the old bundle cannot load), relaunches the dev
+   client on the test Metro, requires a new app process attached to that Metro (and not to
+   8081), and finally reads the running app's `env` over the debugger. Any failure exits 1:
+   stop and fix it. It never signs in and never calls the API or Supabase.
+4. Test. Note that airplane mode does not cut `adb reverse` traffic; to simulate a lost
+   connection run `adb reverse --remove tcp:8010` (and add it back to recover).
+5. Restore: sign out, `adb shell am force-stop ph.lunti.app.dev`, `adb reverse --remove-all`,
+   `adb reverse tcp:8081 tcp:8081`, relaunch the dev client on 8081, stop the test Metro, API
+   and stub, and drop the throwaway database.
