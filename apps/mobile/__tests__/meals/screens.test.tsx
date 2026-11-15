@@ -1,4 +1,4 @@
-import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 
 import { queryClient } from '../../src/api/queryClient';
 import { useSessionStore } from '../../src/stores/session';
@@ -206,7 +206,9 @@ describe('Pantry', () => {
     await open();
     expect(await screen.findByLabelText('2 In stock')).toBeOnTheScreen();
     expect(
-      screen.getByText('1 amount is estimated from receipts. Adjust any to confirm it.'),
+      screen.getByText(
+        '1 amount is estimated from receipts. Confirm the ones that are right, or adjust them.',
+      ),
     ).toBeOnTheScreen();
     expect(screen.getByText('Best before in 1 day')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Edit Eggs, 12 pcs, estimated' })).toBeOnTheScreen();
@@ -226,6 +228,185 @@ describe('Pantry', () => {
     await fireEvent.press(await screen.findByRole('button', { name: 'Less Eggs' }));
     await waitFor(() =>
       expect(api.calls('PATCH', '/api/v1/pantry/pi-1')[0].body).toEqual({ quantity: '11' }),
+    );
+  });
+
+  describe('Confirm quantity', () => {
+    const CONFIRM = 'Confirm Eggs at 12 pcs';
+    const pageWith = (eggs: Record<string, unknown>) =>
+      pantryPage({
+        ...page,
+        items: [pantryItem(eggs), page.items[1]],
+        estimated_count: eggs.confirmed ? 0 : 1,
+      });
+
+    /** The server: a GET reflects whatever the PATCH saved, like the real API. */
+    function serverConfirms() {
+      let eggs: Record<string, unknown> = {};
+      api.set('GET /api/v1/pantry', () => reply(200, pageWith(eggs)));
+      api.set('PATCH /api/v1/pantry/pi-1', (_r: Request, body: unknown) => {
+        eggs = { ...eggs, confirmed: (body as { confirmed?: boolean }).confirmed === true };
+        return reply(200, pantryItem(eggs));
+      });
+    }
+
+    it('is offered only on estimated rows, with an accessible label and hint', async () => {
+      api.set('GET /api/v1/pantry', page);
+      await open();
+      const button = await screen.findByRole('button', { name: CONFIRM });
+      expect(button).toHaveProp(
+        'accessibilityHint',
+        'Marks this amount as correct without changing it',
+      );
+      expect(screen.getByText('Confirm quantity')).toBeOnTheScreen();
+      // Spinach is already confirmed: no action on its row.
+      expect(screen.queryByRole('button', { name: /^Confirm Spinach/ })).toBeNull();
+      expect(screen.getAllByText('Confirm quantity')).toHaveLength(1);
+    });
+
+    it('confirms without changing the amount and keeps it after a reload', async () => {
+      serverConfirms();
+      await open();
+      await fireEvent.press(await screen.findByRole('button', { name: CONFIRM }));
+
+      await waitFor(() =>
+        expect(api.calls('PATCH', '/api/v1/pantry/pi-1').map((c) => c.body)).toEqual([
+          { confirmed: true },
+        ]),
+      );
+      expect(
+        await screen.findByRole('button', { name: 'Edit Eggs, 12 pcs, confirmed' }),
+      ).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: CONFIRM })).toBeNull();
+      expect(screen.getByText('12')).toBeOnTheScreen();
+      // Announced through the toast (a polite live region).
+      expect(useToastStore.getState().message).toBe('Eggs confirmed at 12 pcs.');
+      expect(screen.queryByText(/amount is estimated/)).toBeNull();
+
+      // Persistence: drop the cached list (as after navigation away and back or an app
+      // restart) and load it again from the server.
+      const loadsBefore = api.calls('GET', '/api/v1/pantry').length;
+      await act(() => queryClient.resetQueries({ queryKey: ['pantry'] }));
+      await waitFor(() =>
+        expect(api.calls('GET', '/api/v1/pantry').length).toBeGreaterThan(loadsBefore),
+      );
+      expect(
+        await screen.findByRole('button', { name: 'Edit Eggs, 12 pcs, confirmed' }),
+      ).toBeOnTheScreen();
+      expect(api.calls('PATCH', '/api/v1/pantry/pi-1')).toHaveLength(1);
+    });
+
+    it('sends one request for a double tap', async () => {
+      let release: (r: ReturnType<typeof reply>) => void = () => undefined;
+      api.set('GET /api/v1/pantry', page);
+      api.set(
+        'PATCH /api/v1/pantry/pi-1',
+        () => new Promise<ReturnType<typeof reply>>((resolve) => (release = resolve)),
+      );
+      await open();
+      const button = await screen.findByRole('button', { name: CONFIRM });
+      await fireEvent.press(button);
+      await fireEvent.press(button); // second tap while the first is still on its way
+      expect(await screen.findByText('Confirming…')).toBeOnTheScreen();
+      // Not confirmed until the server says so: Eggs still shows Estimated (only Spinach is).
+      expect(screen.getByText('Estimated')).toBeOnTheScreen();
+      expect(screen.getAllByText('Confirmed')).toHaveLength(1);
+      expect(screen.getByRole('button', { name: CONFIRM })).toBeDisabled();
+      // −/+ wait too, so an amount and a confirm can't race.
+      expect(screen.getByRole('button', { name: 'More Eggs' })).toBeDisabled();
+      await fireEvent.press(screen.getByRole('button', { name: CONFIRM }));
+      release(reply(200, pantryItem({ confirmed: true })));
+      await waitFor(() => expect(useToastStore.getState().message).toBe('Eggs confirmed at 12 pcs.'));
+      expect(api.calls('PATCH', '/api/v1/pantry/pi-1')).toHaveLength(1);
+    });
+
+    it('stays Estimated and explains a server error', () =>
+      withoutRetries(async () => {
+        api.set('GET /api/v1/pantry', page);
+        api.set('PATCH /api/v1/pantry/pi-1', () => problem(500, 'boom'));
+        await open();
+        await fireEvent.press(await screen.findByRole('button', { name: CONFIRM }));
+        await waitFor(() =>
+          expect(useToastStore.getState().message).toBe(
+            "Couldn't confirm Eggs. Something went wrong. Please try again.",
+          ),
+        );
+        expect(screen.getByRole('button', { name: 'Edit Eggs, 12 pcs, estimated' })).toBeOnTheScreen();
+        // Ready to retry.
+        expect(screen.getByRole('button', { name: CONFIRM })).toBeEnabled();
+        expect(screen.getByText('Confirm quantity')).toBeOnTheScreen();
+      }));
+
+    it('stays Estimated when there is no connection', () =>
+      withoutRetries(async () => {
+        api.set('GET /api/v1/pantry', page);
+        api.set('PATCH /api/v1/pantry/pi-1', () => {
+          throw new TypeError('Network request failed');
+        });
+        await open();
+        await fireEvent.press(await screen.findByRole('button', { name: CONFIRM }));
+        await waitFor(() =>
+          expect(useToastStore.getState().message).toBe(
+            "Couldn't confirm Eggs. Can't reach Lunti. Check your connection and try again.",
+          ),
+        );
+        expect(screen.getByRole('button', { name: 'Edit Eggs, 12 pcs, estimated' })).toBeOnTheScreen();
+        expect(screen.getByRole('button', { name: CONFIRM })).toBeEnabled();
+      }));
+
+    it('shows the saved status even if the refresh after it fails', () =>
+      withoutRetries(async () => {
+        let loads = 0;
+        api.set('GET /api/v1/pantry', () => {
+          loads += 1;
+          if (loads > 1) throw new TypeError('Network request failed');
+          return reply(200, page);
+        });
+        api.set('PATCH /api/v1/pantry/pi-1', () => reply(200, pantryItem({ confirmed: true })));
+        await open();
+        await fireEvent.press(await screen.findByRole('button', { name: CONFIRM }));
+        expect(
+          await screen.findByRole('button', { name: 'Edit Eggs, 12 pcs, confirmed' }),
+        ).toBeOnTheScreen();
+        expect(screen.queryByText(/amount is estimated/)).toBeNull();
+      }));
+
+    it('reports the amount the server confirmed', async () => {
+      api.set('GET /api/v1/pantry', page);
+      // e.g. a receipt added eggs on another device since this list loaded.
+      api.set('PATCH /api/v1/pantry/pi-1', () =>
+        reply(200, pantryItem({ quantity: '24.000', confirmed: true })),
+      );
+      await open();
+      await fireEvent.press(await screen.findByRole('button', { name: CONFIRM }));
+      await waitFor(() => expect(useToastStore.getState().message).toBe('Eggs confirmed at 24 pcs.'));
+    });
+
+    it('stays reachable with the largest font size', async () => {
+      const dims = jest
+        .spyOn(require('react-native'), 'useWindowDimensions')
+        .mockReturnValue({ width: 412, height: 915, scale: 2.625, fontScale: 2 });
+      try {
+        api.set('GET /api/v1/pantry', page);
+        await open();
+        expect(await screen.findByRole('button', { name: CONFIRM })).toBeOnTheScreen();
+        expect(screen.getByRole('button', { name: 'Less Eggs' })).toBeOnTheScreen();
+        expect(screen.getByRole('button', { name: 'More Eggs' })).toBeOnTheScreen();
+      } finally {
+        dims.mockRestore();
+      }
+    });
+  });
+
+  it('adjusting with + still sends the new amount (not a bare confirm)', async () => {
+    api.set('GET /api/v1/pantry', page);
+    api.set('PATCH /api/v1/pantry/pi-1', (_r: Request, body: unknown) =>
+      reply(200, pantryItem({ ...(body as object), confirmed: true })),
+    );
+    await open();
+    await fireEvent.press(await screen.findByRole('button', { name: 'More Eggs' }));
+    await waitFor(() =>
+      expect(api.calls('PATCH', '/api/v1/pantry/pi-1')[0].body).toEqual({ quantity: '13' }),
     );
   });
 

@@ -2,11 +2,16 @@
  * Pantry (Pantry.html, SRS 3.1.8). Amounts are estimates from grocery receipts until the user
  * adjusts or confirms them. Expiry is only what the user sets.
  *
+ * Confirming and adjusting are separate: "Confirm quantity" (estimated rows only) sends
+ * `{ confirmed: true }` and never changes the number; −/+ and the edit sheet set a new amount
+ * (which the API also counts as confirmed). The badge turns "Confirmed" only after the server
+ * answers, so an error or no connection never shows a status that wasn't saved.
+ *
  * Left out (no data in the model, flagged for review): storage place (Fridge/Counter),
  * category chips and item icons by type.
  */
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -17,11 +22,13 @@ import {
   BottomSheet,
   Button,
   Card,
+  CheckIcon,
   ChevronLeftIcon,
   ClockBadge,
   PlusIcon,
   TextField,
   TintCard,
+  useLargeText,
 } from '../../src/components';
 import { amountText, daysLeftText, pantryMeta } from '../../src/features/meals/display';
 import { pickDate } from '../../src/features/money/pickDate';
@@ -43,6 +50,10 @@ export default function PantryScreen() {
   const pantry = usePantry();
   const update = useUpdatePantryItem();
   const [editing, setEditing] = useState<PantryItem | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  // A ref, not state: a second tap in the same frame must not send a second request.
+  const confirmInFlight = useRef(false);
+  const largeText = useLargeText();
 
   const save = async (item: PantryItem, body: Parameters<typeof update.mutateAsync>[0]['body']) => {
     try {
@@ -51,6 +62,23 @@ export default function PantryScreen() {
     } catch (error) {
       showToast(`Couldn't update ${item.name}. ${(error as Error).message}`);
       return false;
+    }
+  };
+
+  /** Marks the amount as checked by the user without changing it. */
+  const confirm = async (item: PantryItem) => {
+    if (confirmInFlight.current || update.isPending) return;
+    confirmInFlight.current = true;
+    setConfirmingId(item.id);
+    try {
+      const saved = await update.mutateAsync({ id: item.id, body: { confirmed: true } });
+      // The toast is a polite live region, so TalkBack reads the new status.
+      showToast(`${item.name} confirmed at ${amountText(saved.quantity, saved.unit)}.`);
+    } catch (error) {
+      showToast(`Couldn't confirm ${item.name}. ${(error as Error).message}`);
+    } finally {
+      confirmInFlight.current = false;
+      setConfirmingId(null);
     }
   };
 
@@ -90,7 +118,8 @@ export default function PantryScreen() {
 
         {pantry.isPending ? (
           <LoadingBlocks label="Loading your pantry" heights={[130, 160, 220]} />
-        ) : pantry.isError ? (
+        ) : pantry.isError && !data ? (
+          // Only without a list to show: a failed background refresh keeps the last list.
           <ErrorState
             message={pantry.error.message}
             onRetry={() => pantry.refetch()}
@@ -113,7 +142,7 @@ export default function PantryScreen() {
               {data.estimated_count > 0 ? (
                 <AppText variant="meta">
                   {data.estimated_count} {data.estimated_count === 1 ? 'amount is' : 'amounts are'}{' '}
-                  estimated from receipts. Adjust any to confirm it.
+                  estimated from receipts. Confirm the ones that are right, or adjust them.
                 </AppText>
               ) : null}
             </TintCard>
@@ -157,40 +186,68 @@ export default function PantryScreen() {
               </AppText>
             </View>
             <Card size="list" padding={0}>
-              {data.items.map((item, i) => (
-                <View key={item.id} style={[styles.row, i > 0 && styles.border]}>
-                  <Pressable
-                    onPress={() => setEditing(item)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Edit ${item.name}, ${pantryMeta(item)}, ${item.confirmed ? 'confirmed' : 'estimated'}`}
-                    style={styles.flex}
+              {data.items.map((item, i) => {
+                const confirming = confirmingId === item.id;
+                const busy = update.isPending || confirmingId !== null;
+                return (
+                  <View
+                    key={item.id}
+                    style={[styles.row, largeText && styles.rowStacked, i > 0 && styles.border]}
                   >
-                    <AppText variant="rowTitle">{item.name}</AppText>
-                    <View style={styles.tags}>
-                      <Badge
-                        label={item.confirmed ? 'Confirmed' : 'Estimated'}
-                        tone={item.confirmed ? 'success' : 'neutral'}
-                      />
-                      <AppText variant="meta">{pantryMeta(item)}</AppText>
+                    <View style={largeText ? null : styles.flex}>
+                      <Pressable
+                        onPress={() => setEditing(item)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Edit ${item.name}, ${pantryMeta(item)}, ${item.confirmed ? 'confirmed' : 'estimated'}`}
+                      >
+                        <AppText variant="rowTitle">{item.name}</AppText>
+                        <View style={styles.tags}>
+                          <Badge
+                            label={item.confirmed ? 'Confirmed' : 'Estimated'}
+                            tone={item.confirmed ? 'success' : 'neutral'}
+                          />
+                          <AppText variant="meta">{pantryMeta(item)}</AppText>
+                        </View>
+                      </Pressable>
+                      {item.confirmed ? null : (
+                        <Pressable
+                          onPress={() => void confirm(item)}
+                          disabled={busy}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Confirm ${item.name} at ${amountText(item.quantity, item.unit)}`}
+                          accessibilityHint="Marks this amount as correct without changing it"
+                          accessibilityState={{ disabled: busy, busy: confirming }}
+                          hitSlop={4}
+                          style={({ pressed }) => [
+                            styles.confirm,
+                            (pressed || (busy && !confirming)) && styles.pressed,
+                          ]}
+                        >
+                          <CheckIcon size={16} color={colors.primaryLink} />
+                          <AppText style={styles.linkText}>
+                            {confirming ? 'Confirming…' : 'Confirm quantity'}
+                          </AppText>
+                        </Pressable>
+                      )}
                     </View>
-                  </Pressable>
-                  <View style={styles.stepper}>
-                    <StepButton
-                      label={`Less ${item.name}`}
-                      symbol="−"
-                      disabled={item.quantity === '0.000' || update.isPending}
-                      onPress={() => void save(item, { quantity: stepQuantity(item.quantity, -1) })}
-                    />
-                    <AppText style={styles.qty}>{normalizeQuantity(item.quantity)}</AppText>
-                    <StepButton
-                      label={`More ${item.name}`}
-                      symbol="+"
-                      disabled={update.isPending}
-                      onPress={() => void save(item, { quantity: stepQuantity(item.quantity, 1) })}
-                    />
+                    <View style={[styles.stepper, largeText && styles.stepperStacked]}>
+                      <StepButton
+                        label={`Less ${item.name}`}
+                        symbol="−"
+                        disabled={item.quantity === '0.000' || busy}
+                        onPress={() => void save(item, { quantity: stepQuantity(item.quantity, -1) })}
+                      />
+                      <AppText style={styles.qty}>{normalizeQuantity(item.quantity)}</AppText>
+                      <StepButton
+                        label={`More ${item.name}`}
+                        symbol="+"
+                        disabled={busy}
+                        onPress={() => void save(item, { quantity: stepQuantity(item.quantity, 1) })}
+                      />
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </Card>
           </>
         )}
@@ -351,6 +408,15 @@ const styles = StyleSheet.create({
   count: { alignItems: 'center', gap: spacing.xxs },
   countValue: { ...font(800), fontSize: 24, color: colors.text },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg },
+  // fontScale >= 1.5: the stepper moves under the text so names and the confirm link can wrap.
+  rowStacked: { flexDirection: 'column', alignItems: 'stretch' },
+  confirm: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minHeight: 44,
+    alignSelf: 'flex-start',
+  },
   border: { borderTopWidth: 1, borderTopColor: colors.border },
   tags: {
     flexDirection: 'row',
@@ -362,6 +428,7 @@ const styles = StyleSheet.create({
   link: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   linkText: { ...font(700), fontSize: 15, color: colors.primaryLink },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  stepperStacked: { alignSelf: 'flex-end' },
   step: {
     width: 44,
     height: 44,

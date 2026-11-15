@@ -568,11 +568,26 @@ export function useUpdatePantryItem() {
       unwrap(() =>
         api.PATCH('/api/v1/pantry/{item_id}', { params: { path: { item_id: id } }, body }),
       ),
-    onSuccess: () =>
-      Promise.all([
+    onSuccess: (saved) => {
+      // Show the server's answer at once, so the list is right even if the refetch below
+      // fails (e.g. the connection drops just after the save). Counts other than
+      // estimated_count are left to the refetch.
+      client.setQueryData<PantryPage>(step7Keys.pantry, (page) => {
+        if (!page) return page;
+        const swap = (item: PantryItem) => (item.id === saved.id ? saved : item);
+        const items = page.items.map(swap);
+        return {
+          ...page,
+          items,
+          use_first: page.use_first.map(swap),
+          estimated_count: items.filter((item) => !item.confirmed).length,
+        };
+      });
+      return Promise.all([
         client.invalidateQueries({ queryKey: step7Keys.pantry }),
         client.invalidateQueries({ queryKey: ['recipes'] }),
-      ]),
+      ]);
+    },
   });
 }
 

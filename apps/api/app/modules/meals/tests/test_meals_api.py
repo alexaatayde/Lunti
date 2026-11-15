@@ -150,6 +150,56 @@ def test_adjusting_confirms_and_deleting_never_goes_negative(db_client: TestClie
     assert db_client.patch(f"{PANTRY}/{milk['id']}", headers=headers, json={}).status_code == 422
 
 
+def test_confirming_keeps_the_amount_unit_and_date_exactly(db_client: TestClient, user) -> None:
+    """The app's "Confirm quantity": `{"confirmed": true}` alone changes only the status."""
+    headers, cats, _ = user
+    confirm(db_client, headers, cats, [("Pechay Baguio", "0.525", "120.00", "kg")])
+    soon = (periods.local_today() + timedelta(days=3)).isoformat()
+    pechay = item(pantry(db_client, headers), "Pechay Baguio")
+    db_client.patch(f"{PANTRY}/{pechay['id']}", headers=headers, json={"estimated_expiry": soon})
+    before = item(pantry(db_client, headers), "Pechay Baguio")
+    assert (before["quantity"], before["unit"], before["confirmed"]) == ("0.525", "kg", False)
+    transactions = db_client.get("/api/v1/transactions", headers=headers).json()["items"]
+
+    out = db_client.patch(f"{PANTRY}/{pechay['id']}", headers=headers, json={"confirmed": True})
+    assert out.status_code == 200, out.text
+    keep = ("id", "product_id", "name", "quantity", "unit", "estimated_expiry", "days_left")
+    assert {k: out.json()[k] for k in keep} == {k: before[k] for k in keep}
+    assert out.json()["confirmed"] is True
+
+    # Saved: a fresh read agrees, and the estimated count drops.
+    page = pantry(db_client, headers)
+    assert item(page, "Pechay Baguio") == out.json() and page["estimated_count"] == 0
+    # A repeated confirm (double tap, retry) changes nothing.
+    again = db_client.patch(f"{PANTRY}/{pechay['id']}", headers=headers, json={"confirmed": True})
+    assert again.status_code == 200
+    assert {k: again.json()[k] for k in (*keep, "confirmed")} == {
+        k: out.json()[k] for k in (*keep, "confirmed")
+    }
+    # `confirmed: false` is not an "unconfirm"; it leaves the item as it is.
+    noop = db_client.patch(f"{PANTRY}/{pechay['id']}", headers=headers, json={"confirmed": False})
+    assert (noop.status_code, noop.json()["confirmed"], noop.json()["quantity"]) == (
+        200,
+        True,
+        "0.525",
+    )
+    # Nothing else is created.
+    assert db_client.get("/api/v1/transactions", headers=headers).json()["items"] == transactions
+    assert len(pantry(db_client, headers)["items"]) == 1
+
+
+def test_confirming_someone_elses_item_is_not_found(
+    db_client: TestClient, user, make_user, auth_header
+) -> None:
+    headers, cats, _ = user
+    confirm(db_client, headers, cats, [("Eggs", "6", "8.00", "pcs")])
+    eggs = item(pantry(db_client, headers), "Eggs")
+    other = auth_header(make_user())
+    out = db_client.patch(f"{PANTRY}/{eggs['id']}", headers=other, json={"confirmed": True})
+    assert out.status_code == 404
+    assert item(pantry(db_client, headers), "Eggs")["confirmed"] is False
+
+
 def test_unconfirmed_estimate_is_clamped_at_zero(
     db_client: TestClient, user, admin_engine: Engine
 ) -> None:  # noqa: E501
