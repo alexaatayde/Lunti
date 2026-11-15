@@ -8,8 +8,9 @@
  * before the first render has finished" — fatal in a release build. Reproduced on the R8 release
  * APK by changing Settings → Display → Font size and then tapping any navigation button.
  *
- * With these flags React Native receives onConfigurationChanged instead. Trade-off: screens that
- * are already rendered keep their text size until they re-render; new screens use the new size.
+ * With these flags React Native receives onConfigurationChanged instead. On its own that left a
+ * font-size change made while the app stays on screen invisible to JS until the next resume;
+ * withFontScaleRefresh.ts forwards it.
  * Expo's template already lists orientation, screen size and uiMode (dark mode) for the same reason.
  */
 import { AndroidConfig, withAndroidManifest, type ConfigPlugin } from 'expo/config-plugins';

@@ -25,9 +25,11 @@ import {
   CheckIcon,
   ChevronLeftIcon,
   ClockBadge,
+  MinusIcon,
   PlusIcon,
   TextField,
   TintCard,
+  useFontScaledSize,
   useLargeText,
 } from '../../src/components';
 import { amountText, daysLeftText, pantryMeta } from '../../src/features/meals/display';
@@ -36,7 +38,18 @@ import { EmptyState, ErrorState, LoadingBlocks } from '../../src/features/money/
 import { normalizeQuantity } from '../../src/lib/centavos';
 import { formatShortDate, fromDateKey, localDateKey, todayKey } from '../../src/lib/dates';
 import { showToast } from '../../src/stores/toast';
-import { colors, font, spacing } from '../../src/theme';
+import { colors, font, sizes, spacing } from '../../src/theme';
+
+/** Check icon before "Confirm quantity": matches the 15 sp link text and scales with it (up to 2×). */
+export const CONFIRM_ICON_SIZE = 16;
+/**
+ * −/+ glyphs grow with the font size up to 1.5× (27 dp): enough to stay legible next to 2× text
+ * without crowding the round button. The button keeps an even ring around the glyph and never
+ * drops below 48 dp.
+ */
+export const STEP_ICON_SIZE = 18;
+export const STEP_ICON_MAX_SCALE = 1.5;
+const STEP_ICON_RING = 22;
 
 /** −/+ step: one unit, never below 0; works on the decimal string without floats. */
 export function stepQuantity(quantity: string, by: 1 | -1): string {
@@ -54,6 +67,7 @@ export default function PantryScreen() {
   // A ref, not state: a second tap in the same frame must not send a second request.
   const confirmInFlight = useRef(false);
   const largeText = useLargeText();
+  const confirmIconSize = useFontScaledSize(CONFIRM_ICON_SIZE);
 
   const save = async (item: PantryItem, body: Parameters<typeof update.mutateAsync>[0]['body']) => {
     try {
@@ -223,7 +237,7 @@ export default function PantryScreen() {
                             (pressed || (busy && !confirming)) && styles.pressed,
                           ]}
                         >
-                          <CheckIcon size={16} color={colors.primaryLink} />
+                          <CheckIcon size={confirmIconSize} color={colors.primaryLink} />
                           <AppText style={styles.linkText}>
                             {confirming ? 'Confirming…' : 'Confirm quantity'}
                           </AppText>
@@ -233,14 +247,14 @@ export default function PantryScreen() {
                     <View style={[styles.stepper, largeText && styles.stepperStacked]}>
                       <StepButton
                         label={`Less ${item.name}`}
-                        symbol="−"
+                        Icon={MinusIcon}
                         disabled={item.quantity === '0.000' || busy}
                         onPress={() => void save(item, { quantity: stepQuantity(item.quantity, -1) })}
                       />
                       <AppText style={styles.qty}>{normalizeQuantity(item.quantity)}</AppText>
                       <StepButton
                         label={`More ${item.name}`}
-                        symbol="+"
+                        Icon={PlusIcon}
                         disabled={busy}
                         onPress={() => void save(item, { quantity: stepQuantity(item.quantity, 1) })}
                       />
@@ -281,15 +295,17 @@ function Count({ value, label, tone }: { value: number; label: string; tone?: st
 
 function StepButton({
   label,
-  symbol,
+  Icon,
   disabled,
   onPress,
 }: {
   label: string;
-  symbol: string;
+  Icon: typeof PlusIcon;
   disabled?: boolean;
   onPress: () => void;
 }) {
+  const iconSize = useFontScaledSize(STEP_ICON_SIZE, STEP_ICON_MAX_SCALE);
+  const size = Math.max(sizes.touchTargetMaterial, iconSize + STEP_ICON_RING);
   return (
     <Pressable
       onPress={onPress}
@@ -297,13 +313,13 @@ function StepButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: !!disabled }}
-      style={({ pressed }) => [styles.step, (pressed || disabled) && styles.pressed]}
+      style={({ pressed }) => [
+        styles.step,
+        { width: size, height: size, borderRadius: size / 2 },
+        (pressed || disabled) && styles.pressed,
+      ]}
     >
-      {symbol === '+' ? (
-        <PlusIcon size={18} color={colors.textStrong} />
-      ) : (
-        <AppText style={styles.minus}>−</AppText>
-      )}
+      <Icon size={iconSize} color={colors.textStrong} />
     </Pressable>
   );
 }
@@ -414,7 +430,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    minHeight: 44,
+    minHeight: sizes.touchTargetMaterial,
     alignSelf: 'flex-start',
   },
   border: { borderTopWidth: 1, borderTopColor: colors.border },
@@ -430,15 +446,11 @@ const styles = StyleSheet.create({
   stepper: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   stepperStacked: { alignSelf: 'flex-end' },
   step: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
     borderWidth: 1,
     borderColor: colors.borderInput,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  minus: { ...font(600), fontSize: 20, color: colors.textStrong },
   qty: { ...font(700), fontSize: 16, color: colors.text, minWidth: 28, textAlign: 'center' },
   pressed: { opacity: 0.5 },
   sheet: { gap: spacing.md },

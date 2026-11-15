@@ -9,6 +9,7 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
 import { withActivityConfigChanges } from './plugins/withActivityConfigChanges.ts';
+import { withFontScaleRefresh } from './plugins/withFontScaleRefresh.ts';
 import {
   VARIANT_IDENTITY,
   buildEnvProblems,
@@ -48,8 +49,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     );
   }
 
-  // Font/display/language changes must not recreate MainActivity (see the plugin for why).
-  return withActivityConfigChanges({
+  // Font/display/language changes must not recreate MainActivity (see the plugin for why), and a
+  // font-size change made while the app is on screen is forwarded to JS (withFontScaleRefresh).
+  return withFontScaleRefresh(withActivityConfigChanges({
     ...config,
     name: identity.name,
     slug: config.slug ?? 'lunti',
@@ -77,5 +79,5 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       environmentLabel: identity.label,
       releaseBuild: isReleaseVariant(variant),
     },
-  });
+  }));
 };

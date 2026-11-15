@@ -34,6 +34,15 @@ export function PlusIcon(props: IconProps) {
   );
 }
 
+/** Pantry stepper "less": same stroke and grid as PlusIcon so − and + match at every size. */
+export function MinusIcon(props: IconProps) {
+  return (
+    <IconBase defaultStrokeWidth={2.2} {...props}>
+      <Path d="M5 12h14" />
+    </IconBase>
+  );
+}
+
 /** Home.html (Scan receipt FAB), TxnAddSheet.html */
 export function CameraIcon(props: IconProps) {
   return (

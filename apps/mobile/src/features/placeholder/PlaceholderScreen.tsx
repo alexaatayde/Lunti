@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppHeader, AppText, BottomNav, Button, PageTitle, type TabKey } from '../../components';
 import { colors, spacing } from '../../theme';
+import { TAB_HREF } from '../navigation/activeTab';
 
 export type PlaceholderLink = { label: string; href: Href; replace?: boolean };
 
@@ -30,14 +31,6 @@ export type PlaceholderScreenProps = {
   inTabs?: boolean;
   /** Working pieces added before the full screen is built (e.g. Log out on Profile). */
   children?: ReactNode;
-};
-
-const tabHref: Record<TabKey, Href> = {
-  analytics: '/analytics',
-  budget: '/budget',
-  home: '/home',
-  meals: '/meals',
-  transactions: '/transactions',
 };
 
 export function PlaceholderScreen({
@@ -89,7 +82,7 @@ export function PlaceholderScreen({
         <BottomNav
           active={nav}
           bottomInset={insets.bottom}
-          onSelect={(tab) => router.navigate(tabHref[tab])}
+          onSelect={(tab) => router.navigate(TAB_HREF[tab])}
         />
       ) : null}
     </View>

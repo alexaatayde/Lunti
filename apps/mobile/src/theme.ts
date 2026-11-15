@@ -254,6 +254,11 @@ export const shadows = {
 
 export const sizes = {
   touchTarget: 44,
+  /**
+   * Android/Material minimum (48 dp). Used where a screen has been raised to it (Pantry stepper and
+   * confirm link, bottom-nav items); `touchTarget` stays 44 so other screens are unchanged.
+   */
+  touchTargetMaterial: 48,
   buttonPrimary: 52,
   buttonSecondary: 48,
   input: 52,

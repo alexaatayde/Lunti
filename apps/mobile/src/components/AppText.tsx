@@ -27,6 +27,16 @@ export function useLargeText(): boolean {
   return useWindowDimensions().fontScale >= LARGE_TEXT_SCALE;
 }
 
+/**
+ * An icon or control size that grows with the system font size like the text next to it:
+ * `base × fontScale`, never below `base` (small font settings keep the design size) and never above
+ * `base × maxScale`. Re-renders when the font size changes.
+ */
+export function useFontScaledSize(base: number, maxScale: number = MAX_FONT_SCALE): number {
+  const { fontScale } = useWindowDimensions();
+  return Math.round(base * Math.min(Math.max(fontScale, 1), maxScale));
+}
+
 /** Text with a typography token applied. Extra `style` overrides the variant. */
 export function AppText({
   variant = 'body',
